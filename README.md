@@ -77,10 +77,10 @@ Any model supported by litellm works.
 
 ```bash
 # Using uv
-uv run python basic_coding_agent.py
+uv run python main.py
 
 # Using pip
-python basic_coding_agent.py
+python main.py
 ```
 
 ### Basic commands
@@ -110,7 +110,7 @@ Type `exit`, `quit`, or press `Ctrl+C`.
 
 ```
 simple-coding-agent/
-├── basic_coding_agent.py
+├── coding_agent.py
 ├── main.py
 ├── README.md
 ├── pyproject.toml
@@ -119,7 +119,8 @@ simple-coding-agent/
 ├── .env.example
 ├── .gitignore
 ├── .python-version
-└── bug_fixes_summary.txt
+├── bug_fixes_summary.txt
+└── tests/
 ```
 
 ## Development
@@ -130,14 +131,14 @@ simple-coding-agent/
 
 ### Adding new tools
 
-1. Add a tool function in `basic_coding_agent.py`.
+1. Add a tool function in `coding_agent.py`.
 2. Add its schema in `TOOLS`.
 3. Register it in `tool_registry`.
 
 ### Running tests
 
 ```bash
-python main.py
+python -m pytest
 ```
 
 ## Troubleshooting
