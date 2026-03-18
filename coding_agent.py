@@ -56,18 +56,38 @@ tool_registry = {
 }
 
 
-def llm_completions(conversation: List[Dict[str, str]]):
+def llm_completions(conversation: List[Dict[str, str]],model,api_key):
     messages = []
     for msg in conversation:
         if msg["role"] == "system":
             messages.append({"role": "system", "content": msg["content"]})
         else:
             messages.append(msg)
+    if model and api_key is not None:
+        kwargs = {
+        "model": model,
+        "api_key": api_key,
+        "messages": messages,
+        "max_tokens": 2000,
+        "temperature": 0.1,
+        "tools": TOOLS,
+        }
 
-    try:
-        model = os.environ["MODEL"]
-        api_key = os.environ["API_KEY"]
-    except KeyError as e:
+        if llm_config.get("api_base"):
+            kwargs["api_base"] = llm_config["api_base"]
+        try:
+            response = litellm.completion(**kwargs)
+            return response
+        except Exception as e:
+            error_msg = f"LLM call failed: {str(e)}"
+            print(f"{ERROR_COLOR}{ERROR_ICON} {error_msg}{RESET_COLOR}")
+            print(
+                f"{INFO_COLOR}Make sure you have set up your API keys in the .env file{RESET_COLOR}"
+            )
+            print(f"{INFO_COLOR}Current model: {model}{RESET_COLOR}")
+            return f"I encountered an error: {error_msg}. Please check your API key configuration."
+        
+    else:
         error_msg = f"Missing environment variable: {e}"
         print(f"{ERROR_COLOR}{ERROR_ICON} {error_msg}{RESET_COLOR}")
         print(
@@ -75,38 +95,14 @@ def llm_completions(conversation: List[Dict[str, str]]):
         )
         return f"I encountered an error: {error_msg}. Please check your .env file configuration."
 
-    kwargs = {
-        "model": model,
-        "api_key": api_key,
-        "messages": messages,
-        "max_tokens": 2000,
-        "temperature": 0.1,
-        "tools": TOOLS,
-    }
-
-    if llm_config.get("api_base"):
-        kwargs["api_base"] = llm_config["api_base"]
-    try:
-        response = litellm.completion(**kwargs)
-        return response
-    except Exception as e:
-        error_msg = f"LLM call failed: {str(e)}"
-        print(f"{ERROR_COLOR}{ERROR_ICON} {error_msg}{RESET_COLOR}")
-        print(
-            f"{INFO_COLOR}Make sure you have set up your API keys in the .env file{RESET_COLOR}"
-        )
-        print(f"{INFO_COLOR}Current model: {model}{RESET_COLOR}")
-        return f"I encountered an error: {error_msg}. Please check your API key configuration."
-
-
-def agent_loop():
+def agent_loop(model:str,api_key:str):
     print(
         f"{SUCCESS_COLOR}{SUCCESS_ICON} Starting coding agent with litellm (provider-agnostic)...{RESET_COLOR}"
     )
     print(f"{INFO_COLOR}Type 'exit' or press Ctrl+C to quit.{RESET_COLOR}\n")
 
     conversation = [{"role": "system", "content": SYSTEM_PROMPT}]
-
+    
     while True:
         try:
             user_input = input(f"{YOU_COLOR}You:{RESET_COLOR} ")
@@ -124,7 +120,7 @@ def agent_loop():
         print(f"{THINKING_ICON} Assistant is thinking...", end="\r")
 
         while True:
-            response = llm_completions(conversation)
+            response = llm_completions(conversation,model,api_key)
             print(" " * 30, end="\r")
             if isinstance(response, str):
                 print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} {response}")
@@ -166,6 +162,7 @@ def agent_loop():
                         tool_name = tool_call.function.name
 
                         # fuction args returned in the response are always json and need to be parsed.
+                        # The model returns json as its the universal language of the internet, and not everyone understands python dicts
                         try:
                             tool_args = json.loads(tool_call.function.arguments)
                             # Format tool call display
@@ -175,7 +172,8 @@ def agent_loop():
                             print(f"  {i}. {TOOL_ICON} {tool_name}({args_display})")
 
                             tool = tool_registry.get(tool_name)
-
+                            
+                            # remember that at many of these places, we dump python objects to json as we don't want to feed in python objects/dicts/etc to the model.
                             # check if tool exists
                             if not tool:
                                 error_msg = f"Unknown tool: {tool_name}"
@@ -193,6 +191,7 @@ def agent_loop():
 
                             # if it exists, lets execute it
                             try:
+                                # execute the tool code and dump the response in json 
                                 resp = tool(**tool_args)
                                 conversation.append(
                                     {
@@ -235,4 +234,4 @@ def agent_loop():
 
 
 if __name__ == "__main__":
-    agent_loop()
+    agent_loop(model=os.getenv("MODEL",""),api_key=os.getenv("API_KEY",""))
