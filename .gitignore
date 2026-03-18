@@ -16,4 +16,4 @@ wheels/
 .ruff_cache/
 
 # notes
-bug_fixed_summary.txt
+bug_fixes_summary.txt
