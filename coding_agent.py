@@ -56,23 +56,33 @@ tool_registry = {
 }
 
 
-def llm_completions(conversation: List[Dict[str, str]],model,api_key):
-    messages = []
+def build_messages(conversation: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    messages: List[Dict[str, str]] = []
     for msg in conversation:
         if msg["role"] == "system":
             messages.append({"role": "system", "content": msg["content"]})
         else:
             messages.append(msg)
+    return messages
+
+
+def print_error(context: str, message: str) -> None:
+    print(f"{ERROR_COLOR}{ERROR_ICON} {context}: {message}{RESET_COLOR}")
+
+
+def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str):
+    messages = build_messages(conversation)
     if model and api_key is not None:
         kwargs = {
-        "model": model,
-        "api_key": api_key,
-        "messages": messages,
-        "max_tokens": 2000,
-        "temperature": 0.1,
-        "tools": TOOLS,
+            "model": model,
+            "api_key": api_key,
+            "messages": messages,
+            "max_tokens": 2000,
+            "temperature": 0.1,
+            "tools": TOOLS,
         }
 
+        # Allow overriding the LLM base URL without changing call sites.
         if llm_config.get("api_base"):
             kwargs["api_base"] = llm_config["api_base"]
         try:
@@ -80,22 +90,97 @@ def llm_completions(conversation: List[Dict[str, str]],model,api_key):
             return response
         except Exception as e:
             error_msg = f"LLM call failed: {str(e)}"
-            print(f"{ERROR_COLOR}{ERROR_ICON} {error_msg}{RESET_COLOR}")
+            print_error("LLM error", error_msg)
             print(
                 f"{INFO_COLOR}Make sure you have set up your API keys in the .env file{RESET_COLOR}"
             )
             print(f"{INFO_COLOR}Current model: {model}{RESET_COLOR}")
             return f"I encountered an error: {error_msg}. Please check your API key configuration."
-        
     else:
-        error_msg = f"Missing environment variable: {e}"
-        print(f"{ERROR_COLOR}{ERROR_ICON} {error_msg}{RESET_COLOR}")
+        error_msg = "Missing environment variable: MODEL or API_KEY"
+        print_error("Configuration error", error_msg)
         print(
             f"{INFO_COLOR}Please set MODEL and API_KEY in your .env file{RESET_COLOR}"
         )
         return f"I encountered an error: {error_msg}. Please check your .env file configuration."
 
-def agent_loop(model:str,api_key:str):
+
+def run_tool_call(
+    tool_call, conversation: List[Dict[str, Any]], index: int
+) -> None:
+    tool_name = tool_call.function.name
+    try:
+        # Tool arguments arrive as JSON strings in the model response.
+        tool_args = json.loads(tool_call.function.arguments)
+        args_display = ", ".join(f"{k}={v}" for k, v in tool_args.items())
+        print(f"  {index}. {TOOL_ICON} {tool_name}({args_display})")
+
+        tool = tool_registry.get(tool_name)
+        if not tool:
+            error_msg = f"Unknown tool: {tool_name}"
+            print_error("Tool error", error_msg)
+            conversation.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps({"error": error_msg}),
+                }
+            )
+            return
+
+        try:
+            resp = tool(**tool_args)
+            conversation.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(resp),
+                }
+            )
+        except Exception as e:
+            error_msg = f"Tool execution failed: {str(e)}"
+            print_error("Tool error", error_msg)
+            conversation.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps({"error": error_msg}),
+                }
+            )
+    except json.JSONDecodeError:
+        print("The model sent back a broken JSON string!")
+
+def handle_assistant_message(assistant_message, conversation: List[Dict[str, Any]]) -> None:
+    content = getattr(assistant_message, "content", "") or ""
+    tool_calls = getattr(assistant_message, "tool_calls", None) or []
+
+    if not tool_calls:
+        if content.strip():
+            print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} {content}")
+        conversation.append({"role": "assistant", "content": content})
+        return
+
+    if content.strip():
+        print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} {content}")
+
+    # Preserve the model's assistant message before executing any tool calls.
+    conversation.append(
+        {
+            "role": "assistant",
+            "content": content,
+            "tool_calls": tool_calls,  # type: ignore
+        }
+    )
+
+    print(
+        f"{TOOL_COLOR}🔄 Executing {len(tool_calls)} tool{'s' if len(tool_calls) > 1 else ''}...{RESET_COLOR}"
+    )
+
+    for index, tool_call in enumerate(tool_calls, 1):
+        run_tool_call(tool_call, conversation, index)
+
+
+def agent_loop(model: str, api_key: str):
     print(
         f"{SUCCESS_COLOR}{SUCCESS_ICON} Starting coding agent with litellm (provider-agnostic)...{RESET_COLOR}"
     )
@@ -116,11 +201,11 @@ def agent_loop(model:str,api_key:str):
 
         conversation.append({"role": "user", "content": user_input.strip()})
 
-        # Show thinking indicator
+        # Show thinking indicator while waiting on the LLM.
         print(f"{THINKING_ICON} Assistant is thinking...", end="\r")
 
         while True:
-            response = llm_completions(conversation,model,api_key)
+            response = llm_completions(conversation, model, api_key)
             print(" " * 30, end="\r")
             if isinstance(response, str):
                 print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} {response}")
@@ -129,92 +214,10 @@ def agent_loop(model:str,api_key:str):
             # to understand what is going on here, go and read the liteLLM response json format.
             try:
                 if hasattr(response, "choices") and response.choices:  # type: ignore
+                    # Only the first choice is used for this CLI loop.
                     assistant_message = response.choices[0].message  # type: ignore
-                    content = getattr(assistant_message, "content", "") or ""
-
-                    tool_calls = getattr(assistant_message, "tool_calls", None) or []
-
-                    if not tool_calls:
-                        # No tool calls, just print the response
-                        if content.strip():
-                            print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} {content}")
-                        conversation.append({"role": "assistant", "content": content})
-                        break
-
-                    # Show assistant's initial response if any
-                    if content.strip():
-                        print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} {content}")
-
-                    # Handle tool calls with better formatting
-                    conversation.append(
-                        {
-                            "role": "assistant",
-                            "content": content,
-                            "tool_calls": tool_calls,  # type: ignore
-                        }
-                    )
-
-                    print(
-                        f"{TOOL_COLOR}🔄 Executing {len(tool_calls)} tool{'s' if len(tool_calls) > 1 else ''}...{RESET_COLOR}"
-                    )
-
-                    for i, tool_call in enumerate(tool_calls, 1):
-                        tool_name = tool_call.function.name
-
-                        # fuction args returned in the response are always json and need to be parsed.
-                        # The model returns json as its the universal language of the internet, and not everyone understands python dicts
-                        try:
-                            tool_args = json.loads(tool_call.function.arguments)
-                            # Format tool call display
-                            args_display = ", ".join(
-                                f"{k}={v}" for k, v in tool_args.items()
-                            )
-                            print(f"  {i}. {TOOL_ICON} {tool_name}({args_display})")
-
-                            tool = tool_registry.get(tool_name)
-                            
-                            # remember that at many of these places, we dump python objects to json as we don't want to feed in python objects/dicts/etc to the model.
-                            # check if tool exists
-                            if not tool:
-                                error_msg = f"Unknown tool: {tool_name}"
-                                print(
-                                    f"     {ERROR_COLOR}{ERROR_ICON} {error_msg}{RESET_COLOR}"
-                                )
-                                conversation.append(
-                                    {
-                                        "role": "tool",
-                                        "tool_call_id": tool_call.id,
-                                        "content": json.dumps({"error": error_msg}),
-                                    }
-                                )
-                                continue
-
-                            # if it exists, lets execute it
-                            try:
-                                # execute the tool code and dump the response in json 
-                                resp = tool(**tool_args)
-                                conversation.append(
-                                    {
-                                        "role": "tool",
-                                        "tool_call_id": tool_call.id,
-                                        "content": json.dumps(resp),
-                                    }
-                                )
-                            except Exception as e:
-                                error_msg = f"Tool execution failed: {str(e)}"
-                                print(
-                                    f"     {ERROR_COLOR}{ERROR_ICON} {error_msg}{RESET_COLOR}"
-                                )
-                                conversation.append(
-                                    {
-                                        "role": "tool",
-                                        "tool_call_id": tool_call.id,
-                                        "content": json.dumps({"error": error_msg}),
-                                    }
-                                )
-
-                        except json.JSONDecodeError:
-                            print("The model sent back a broken JSON string!")
+                    handle_assistant_message(assistant_message, conversation)
+                    break
 
                 else:
                     # Fallback for unexpected response format
