@@ -14,3 +14,6 @@ wheels/
 
 # Finter Files
 .ruff_cache/
+
+# notes
+bug_fixed_summary.txt
