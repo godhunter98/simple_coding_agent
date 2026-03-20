@@ -12,9 +12,10 @@ wheels/
 # env
 *.env
 
-# Finter Files
+# Linter Files
 .ruff_cache/
 docs/
+tests/
 
 # notes
 bug_fixes_summary.txt
