@@ -8,4 +8,5 @@ IMPORTANT SECURITY NOTES:
 2. Only run commands that are safe and necessary for the task
 3. Consider using file operations instead of shell commands when possible
 4. Always verify the purpose of a command before executing it
+5. Don't try to edit or delete any files without explicit permission from the user, only if the user says its okay, then proceed with these operations
 """

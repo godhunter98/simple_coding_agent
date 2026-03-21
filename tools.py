@@ -15,8 +15,40 @@ from ui import (
     DIR_ICON,
 )
 
+UNSAFE_PATTERNS = [
+    # Destructive file operations
+    "rm -rf", "rm -f", "rmdir",
+    # Disk/partition operations
+    "mkfs", "fdisk", "dd if=",
+    # Privilege escalation
+    "sudo", "su ",
+    # Network transfer
+    "curl", "wget",
+    # Redirect overwrite to root paths
+    "> /",
+    # Process/system manipulation
+    "kill -9", "shutdown", "reboot",
+    # Environment tampering
+    "export path=", "unset path",
+]
 
-def run_bash_command_tool(command: str) -> Dict[str, Any]:
+
+def is_unsafe(command: str) -> bool:
+    normalized = command.strip().lower()
+    return any(pattern in normalized for pattern in UNSAFE_PATTERNS)
+
+
+def run_bash_command_tool(command: str) -> Dict[str, Any]|str:
+    # safety check
+    if is_unsafe(command):
+        print(f"{ERROR_COLOR}{ERROR_ICON} Potentially unsafe command: {command}{RESET_COLOR}")
+        confirm = input("Run anyway? (y/N): ").strip().lower()
+        if confirm != "y":
+            return {
+                "command": command,
+                "error": "Cancelled by user",
+                "success": False,
+            }
     print(
         f"{TOOL_COLOR}{TOOL_ICON} Running bash command: {INFO_COLOR}{command}{RESET_COLOR}"
     )
@@ -56,6 +88,19 @@ def run_bash_command_tool(command: str) -> Dict[str, Any]:
 
 def run_existing_bash_script_tool(script_path: str) -> Dict[str, Any]:
     full_path = resolve_abs_path(script_path)
+    try:
+        script_content = full_path.read_text(encoding="utf-8")
+        if is_unsafe(script_content):
+            print(f"{ERROR_COLOR}{ERROR_ICON} Potentially unsafe script: {script_path}{RESET_COLOR}")
+            confirm = input("Run anyway? (y/N): ").strip().lower()
+            if confirm != "y":
+                return {
+                    "script_path": str(full_path),
+                    "error": "Cancelled by user",
+                    "success": False,
+                }
+    except Exception:
+        pass  # If we can't read it, let subprocess handle the error
     print(
         f"{TOOL_COLOR}{TOOL_ICON} Running bash script: {INFO_COLOR}{script_path}{RESET_COLOR}"
     )
@@ -120,13 +165,14 @@ def list_file_tool(path: str) -> Dict[str, Any]:
     all_files = []
     for item in full_path.iterdir():
         icon = FILE_ICON if item.is_file() else DIR_ICON
-        all_files.append(
-            {
-                "icon": icon,
-                "filename": item.name,
-                "type": "file" if item.is_file() else "dir",
-            }
-        )
+        if not item.name.startswith(".env"):
+            all_files.append(
+                {
+                    "icon": icon,
+                    "filename": item.name,
+                    "type": "file" if item.is_file() else "dir",
+                }
+            )
     return {"path": str(full_path), "files": all_files}
 
 
