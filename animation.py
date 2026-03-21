@@ -19,7 +19,7 @@ BANNER_LINES = [
     r"  ╚═════╝ ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝     ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   ",
 ]
 
-TAGLINE  = "Your provider-agnostic coding assistant"
+TAGLINE  = "🤖 Your provider-agnostic coding assistant"
 DIVIDER  = "─" * 80
 TOOLS_LINE = "  🔧 read  ·  📁 list  ·  ✏️  edit  ·  💻 bash  ·  📜 script"
 
