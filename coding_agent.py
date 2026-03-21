@@ -1,7 +1,6 @@
 import os
 import warnings
 import logging
-from dotenv import load_dotenv
 from typing import Any, Dict, List
 from litellm import litellm
 import json
@@ -37,8 +36,6 @@ os.environ["LITELLM_IGNORE_PYDANTIC_WARNINGS"] = "1"
 logging.getLogger("litellm").setLevel(logging.WARNING)
 os.environ["LITELLM_LOG"] = "ERROR"
 
-
-load_dotenv()
 
 llm_config = {}
 
