@@ -17,7 +17,7 @@ from ui import (
 
 UNSAFE_PATTERNS = [
     # Destructive file operations
-    "rm -rf", "rm -f", "rmdir",
+    "rm -rf", "rm -f", "rmdir", "rm",
     # Disk/partition operations
     "mkfs", "fdisk", "dd if=",
     # Privilege escalation
