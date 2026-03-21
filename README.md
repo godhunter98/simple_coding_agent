@@ -1,158 +1,67 @@
 # Simple Coding Agent
 
-A lightweight CLI coding assistant that uses LLMs to help with common coding tasks.
+A lightweight CLI coding assistant powered by LLMs via [litellm](https://github.com/BerriAI/litellm).
 
 ## Features
 
-- Read, list, and edit files through conversation
-- Run bash commands and existing bash scripts
-- 5 integrated tools
-- Provider-agnostic LLM access via [litellm](https://github.com/BerriAI/litellm)
-- Works with many models (OpenAI, Anthropic, Gemini, DeepSeek, local)
-- Color-coded interactive CLI
-- `.env` based configuration
-- Warnings for risky shell operations
+- 5 tools: read, list, edit files · run bash commands · run bash scripts
+- Provider-agnostic — works with OpenAI, Anthropic, Gemini, DeepSeek, local models
+- Safety checks on shell commands with warn + confirm prompt
+- Animated terminal UI — block-letter banner, braille spinner
 
 ## Installation
 
-### Prerequisites
-- Python 3.12 or higher
-- [uv](https://github.com/astral-sh/uv) (recommended) or pip
-
-### Using uv (recommended)
-
 ```bash
-# Clone the repository
 git clone <repository-url>
 cd simple-coding-agent
-
-# Install dependencies
 uv sync
-
-# Activate virtual environment
-source .venv/bin/activate  # On Unix/macOS
-# or
-.venv\Scripts\activate     # On Windows
 ```
 
-### Using pip
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd simple-coding-agent
-
-# Create and activate virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Unix/macOS
-# or
-.venv\Scripts\activate     # On Windows
-
-# Install dependencies
-pip install -e .
-```
+Or with pip: `pip install -e .`
 
 ## Configuration
 
-Create a `.env` file with at least:
+Create a `.env` file:
 
 ```env
 MODEL="deepseek/deepseek-coder"
 API_KEY="your-api-key-here"
+API_BASE="http://localhost:8000/v1"  # optional, for local models
 ```
 
-Optional settings:
-
-```env
-API_BASE="http://localhost:8000/v1"
-USE_UV=1
-```
-
-### Supported models
 Any model supported by litellm works.
 
 ## Usage
 
-### Starting the agent
-
 ```bash
-# Using uv
 uv run python main.py
-
-# Using pip
+# or
 python main.py
 ```
 
-### Basic commands
-
-Example:
-
-```
-You: Can you read the main.py file?
-Assistant: I'll read that file for you.
-```
-
-### Available tools
-
-- `read_file(filename)`
-- `list_file(path)`
-- `edit_file(path, old_str, new_str)`
-- `run_bash_command(command)`
-- `run_existing_bash_script(script_path)`
-
-#### Security note
-Shell commands run with your permissions. Use caution and prefer file tools when possible.
-
-### Exiting
-Type `exit`, `quit`, or press `Ctrl+C`.
+Type `exit`, `quit`, or press `Ctrl+C` to quit.
 
 ## Project structure
 
 ```
 simple-coding-agent/
-├── coding_agent.py
-├── main.py
-├── README.md
-├── pyproject.toml
-├── uv.lock
-├── .env
-├── .env.example
-├── .gitignore
-├── .python-version
-├── bug_fixes_summary.txt
-└── tests/
+├── main.py           # entrypoint
+├── coding_agent.py   # agent loop + LLM calls
+├── tools.py          # tool definitions + safety checks
+├── prompts.py        # system prompt
+├── animation.py      # banner + spinner
+├── ui.py             # colors + icons
+└── pyproject.toml
 ```
 
-## Development
+## Adding new tools
 
-### Dependencies
-- `litellm`
-- `python-dotenv`
-
-### Adding new tools
-
-1. Add a tool function in `coding_agent.py`.
-2. Add its schema in `TOOLS`.
-3. Register it in `tool_registry`.
-
-### Running tests
-
-```bash
-python -m pytest
-```
+1. Add a function in `tools.py`
+2. Add its schema to `TOOLS`
+3. Register it in `tool_registry` in `coding_agent.py`
 
 ## Troubleshooting
 
-- Missing env vars: set `MODEL` and `API_KEY` in `.env`.
-- LLM call fails: check key, model name, and network.
-- File errors: verify path and permissions.
-
-## License
-Open source.
-
-## Contributing
-Pull requests welcome.
-
-## Acknowledgments
-- [litellm](https://github.com/BerriAI/litellm)
-- [uv](https://github.com/astral-sh/uv)
+- Missing env vars → set `MODEL` and `API_KEY` in `.env`
+- LLM call fails → check API key, model name, and network
+- File errors → verify path and permissions
