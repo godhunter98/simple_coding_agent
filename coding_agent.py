@@ -14,6 +14,7 @@ from tools import (
     run_existing_bash_script_tool,
 )
 from prompts import SYSTEM_PROMPT
+from animation import Spinner
 from ui import (
     YOU_COLOR,
     ASSISTANT_COLOR,
@@ -180,7 +181,7 @@ def handle_assistant_message(assistant_message, conversation: List[Dict[str, Any
 
 def agent_loop(model: str, api_key: str):
     print(
-        f"{SUCCESS_COLOR}{SUCCESS_ICON} Starting coding agent with litellm (provider-agnostic)...{RESET_COLOR}"
+        f"{SUCCESS_COLOR}{SUCCESS_ICON} Spinning up agent...{RESET_COLOR}"
     )
     print(f"{INFO_COLOR}Type 'exit' or press Ctrl+C to quit.{RESET_COLOR}\n")
 
@@ -193,18 +194,21 @@ def agent_loop(model: str, api_key: str):
             print(f"\n{INFO_COLOR}Goodbye! 👋{RESET_COLOR}")
             break
 
+        if not user_input.strip():
+            continue
+
         if user_input.lower() in ["exit", "quit"]:
             print(f"\n{INFO_COLOR}Goodbye! 👋{RESET_COLOR}")
             break
 
         conversation.append({"role": "user", "content": user_input.strip()})
 
-        # Show thinking indicator while waiting on the LLM.
-        print(f"{THINKING_ICON} Assistant is thinking...", end="\r")
+        spinner = Spinner()
+        spinner.start()
 
         while True:
             response = llm_completions(conversation, model, api_key)
-            print(" " * 30, end="\r")
+            spinner.stop()
             if isinstance(response, str):
                 print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} {response}")
                 break
@@ -218,7 +222,7 @@ def agent_loop(model: str, api_key: str):
                     handle_assistant_message(assistant_message,conversation)
                     if not assistant_message.tool_calls:
                         break
-                    print(f"{THINKING_ICON} Assistant is thinking...", end="\r")
+                    spinner.start()
                     continue                                     
 
                 else:

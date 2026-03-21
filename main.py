@@ -1,6 +1,6 @@
 import os
-
 from coding_agent import agent_loop
+from animation import print_banner
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,6 +10,7 @@ api_key = os.getenv("API_KEY", "")
 
 
 def main():
+    print_banner()
     agent_loop(model, api_key)
 
 
