@@ -179,7 +179,7 @@ def handle_assistant_message(assistant_message, conversation: List[Dict[str, Any
         run_tool_call(tool_call, conversation, index)
 
 
-def agent_loop(model: str, api_key: str):
+def agent_loop(model: str, api_key: str,max_iterations:int = 15):
     print(
         f"{SUCCESS_COLOR}{SUCCESS_ICON} Spinning up agent...{RESET_COLOR}"
     )
@@ -206,7 +206,11 @@ def agent_loop(model: str, api_key: str):
         spinner = Spinner()
         spinner.start()
 
-        while True:
+        current_iteration = 0
+
+        while current_iteration<=max_iterations:
+            current_iteration+=1
+
             response = llm_completions(conversation, model, api_key)
             spinner.stop()
             if isinstance(response, str):

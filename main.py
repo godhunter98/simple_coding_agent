@@ -11,7 +11,7 @@ api_key = os.getenv("API_KEY", "")
 
 def main():
     print_banner()
-    agent_loop(model, api_key)
+    agent_loop(model, api_key,10)
 
 
 if __name__ == "__main__":
