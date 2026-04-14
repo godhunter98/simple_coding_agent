@@ -5,12 +5,8 @@ from typing import Any, Dict, List
 from litellm import litellm
 import json
 from tools import (
-    TOOLS,
-    read_file_tool,
-    list_file_tool,
-    edit_file_tool,
-    run_bash_command_tool,
-    run_existing_bash_script_tool,
+    tool_schema,
+    tool_registry
 )
 from prompts import SYSTEM_PROMPT
 from animation import Spinner
@@ -44,15 +40,6 @@ if os.environ.get("API_BASE"):
     llm_config["api_base"] = os.environ["API_BASE"]
 
 
-tool_registry = {
-    "read_file": read_file_tool,
-    "list_file": list_file_tool,
-    "edit_file": edit_file_tool,
-    "run_bash_command": run_bash_command_tool,
-    "run_existing_bash_script": run_existing_bash_script_tool,
-}
-
-
 def build_messages(conversation: List[Dict[str, str]]) -> List[Dict[str, str]]:
     messages: List[Dict[str, str]] = []
     for msg in conversation:
@@ -76,7 +63,7 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
             "messages": messages,
             "max_tokens": 2000,
             "temperature": 0.1,
-            "tools": TOOLS,
+            "tools": tool_schema,
         }
 
         # Allow overriding the LLM base URL without changing call sites.

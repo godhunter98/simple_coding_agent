@@ -19,3 +19,7 @@ tests/
 
 # notes
 bug_fixes_summary.txt
+
+# test files 
+play.py
+decorators.py

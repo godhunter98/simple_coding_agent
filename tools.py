@@ -1,6 +1,8 @@
 import subprocess
 from typing import Dict, Any
 from pathlib import Path
+import inspect
+from typing import get_type_hints
 
 from ui import (
     TOOL_COLOR,
@@ -14,6 +16,49 @@ from ui import (
     FILE_ICON,
     DIR_ICON,
 )
+
+tool_schema = list()
+tool_registry = dict()
+
+# Decorator to register_tool names, their func and creating a tool_schema for each on the fly.
+def register_tool(func):
+    """Register a function as a tool"""
+    tool_registry[func.__name__] = func
+
+    single_schema = dict()
+
+    single_schema["type"]="function"
+    
+    # to undertand what's going here, you need to look at what a typical schema looks like!
+    single_schema["function"]= dict()
+    single_schema["function"]["name"]=func.__name__
+
+    hints = get_type_hints(func)
+    sig = inspect.signature(func)
+
+    properties = {}
+    required = []
+    TYPE_MAP = {str: "string", int: "integer", float: "number", bool: "boolean"}
+    
+    for param_name, param in sig.parameters.items():
+        json_type = TYPE_MAP.get(hints.get(param_name, str), "string")
+        properties[param_name] = {
+            "type": json_type,
+            "description": f"Parameter {param_name}"
+        }
+        if param.default is inspect.Parameter.empty:
+            required.append(param_name)
+
+    single_schema["function"]["description"] = func.__doc__ or "No description provided"
+    single_schema["function"]["parameters"] = {
+        "type": "object",
+        "properties": properties,
+        "required": required
+    }
+
+    tool_schema.append(single_schema)
+
+    return func
 
 UNSAFE_PATTERNS = [
     # Destructive file operations
@@ -32,13 +77,12 @@ UNSAFE_PATTERNS = [
     "export path=", "unset path",
 ]
 
-
 def is_unsafe(command: str) -> bool:
     normalized = command.strip().lower()
     return any(pattern in normalized for pattern in UNSAFE_PATTERNS)
 
-
-def run_bash_command_tool(command: str) -> Dict[str, Any]|str:
+@register_tool
+def run_bash_command(command: str) -> Dict[str, Any]|str:
     # safety check
     if is_unsafe(command):
         print(f"{ERROR_COLOR}{ERROR_ICON} Potentially unsafe command: {command}{RESET_COLOR}")
@@ -85,8 +129,8 @@ def run_bash_command_tool(command: str) -> Dict[str, Any]|str:
             "error": f"Command failed with exit code {e.returncode}",
         }
 
-
-def run_existing_bash_script_tool(script_path: str) -> Dict[str, Any]:
+@register_tool
+def run_existing_bash_script(script_path: str) -> Dict[str, Any]:
     full_path = resolve_abs_path(script_path)
     try:
         script_content = full_path.read_text(encoding="utf-8")
@@ -137,15 +181,14 @@ def run_existing_bash_script_tool(script_path: str) -> Dict[str, Any]:
             "error": f"Script failed with exit code {e.returncode}",
         }
 
-
 def resolve_abs_path(path_str: str) -> Path:
     path = Path(path_str).expanduser()
     if not path.is_absolute():
         path = (Path.cwd() / path).resolve()
     return path
 
-
-def read_file_tool(filename: str) -> Dict[str, Any]:
+@register_tool
+def read_file(filename: str) -> Dict[str, Any]:
     full_path = resolve_abs_path(filename)
     print(f"{TOOL_COLOR}{TOOL_ICON} Reading file: {INFO_COLOR}{filename}{RESET_COLOR}")
     try:
@@ -156,8 +199,8 @@ def read_file_tool(filename: str) -> Dict[str, Any]:
         print(f"{ERROR_COLOR}{ERROR_ICON} Error reading file: {e}{RESET_COLOR}")
         return {"file_path": str(full_path), "content": "", "error": str(e)}
 
-
-def list_file_tool(path: str) -> Dict[str, Any]:
+@register_tool
+def list_file(path: str) -> Dict[str, Any]:
     full_path = resolve_abs_path(path)
     print(
         f"{TOOL_COLOR}{TOOL_ICON} Listing directory: {INFO_COLOR}{full_path}{RESET_COLOR}"
@@ -175,8 +218,8 @@ def list_file_tool(path: str) -> Dict[str, Any]:
             )
     return {"path": str(full_path), "files": all_files}
 
-
-def edit_file_tool(path: str, old_str: str, new_str: str) -> Dict[str, Any]:
+@register_tool
+def edit_file(path: str, old_str: str, new_str: str) -> Dict[str, Any]:
     full_path = resolve_abs_path(path)
     try:
         if old_str == "":
@@ -204,100 +247,3 @@ def edit_file_tool(path: str, old_str: str, new_str: str) -> Dict[str, Any]:
     except Exception as e:
         print(f"{ERROR_COLOR}{ERROR_ICON} Error editing file: {e}{RESET_COLOR}")
         return {"path": str(full_path), "action": "error", "error": str(e)}
-
-
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "read_file",
-            "description": "Gets the full content of a file provided by the user.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "filename": {
-                        "type": "string",
-                        "description": "The name of the file to read.",
-                    }
-                },
-                "required": ["filename"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_file",
-            "description": "List all the files in a directory provided by the user.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "The path of the directory to list files from.",
-                    }
-                },
-                "required": ["path"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "edit_file",
-            "description": "Replaces the first instance of old_string in a file, with a new_string provided by the user",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {
-                        "type": "string",
-                        "description": "The path to the file to edit.",
-                    },
-                    "old_str": {
-                        "type": "string",
-                        "description": "The specific piece of string that you want to replace from the file.",
-                    },
-                    "new_str": {
-                        "type": "string",
-                        "description": "The new string that you want to replace the old string with.",
-                    },
-                },
-                "required": ["path", "old_str", "new_str"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_bash_command",
-            "description": "Executes a bash command in the shell and returns the output.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "command": {
-                        "type": "string",
-                        "description": "The bash command to execute.",
-                    }
-                },
-                "required": ["command"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_existing_bash_script",
-            "description": "Runs an existing bash script file.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "script_path": {
-                        "type": "string",
-                        "description": "The path to the bash script file to execute.",
-                    }
-                },
-                "required": ["script_path"],
-            },
-        },
-    },
-]
