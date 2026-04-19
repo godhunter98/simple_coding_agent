@@ -1,6 +1,10 @@
+from textwrap import indent
 import subprocess
 from typing import Dict, Any
+import types
+# Builtin types that don't have constructors in the built-in namespace (e.g. functions, generators, methods)
 from pathlib import Path
+import json
 import inspect
 from typing import get_type_hints
 
@@ -21,17 +25,19 @@ tool_schema = list()
 tool_registry = dict()
 
 # Decorator to register_tool names, their func and creating a tool_schema for each on the fly.
-def register_tool(func):
+def register_tool(func:types.FunctionType):
     """Register a function as a tool"""
     tool_registry[func.__name__] = func
 
     single_schema = dict()
 
     single_schema["type"]="function"
-    
+    single_schema["name"]=func.__name__
+    single_schema["description"] = func.__doc__ or "No description provided"
+
     # to undertand what's going here, you need to look at what a typical schema looks like!
-    single_schema["function"]= dict()
-    single_schema["function"]["name"]=func.__name__
+    single_schema["parameters"]= dict()
+    
 
     hints = get_type_hints(func)
     sig = inspect.signature(func)
@@ -49,8 +55,7 @@ def register_tool(func):
         if param.default is inspect.Parameter.empty:
             required.append(param_name)
 
-    single_schema["function"]["description"] = func.__doc__ or "No description provided"
-    single_schema["function"]["parameters"] = {
+    single_schema["parameters"] = {
         "type": "object",
         "properties": properties,
         "required": required
@@ -189,6 +194,7 @@ def resolve_abs_path(path_str: str) -> Path:
 
 @register_tool
 def read_file(filename: str) -> Dict[str, Any]:
+    """ A simple too to read any kind of files, just provide the filename with its extension"""
     full_path = resolve_abs_path(filename)
     print(f"{TOOL_COLOR}{TOOL_ICON} Reading file: {INFO_COLOR}{filename}{RESET_COLOR}")
     try:
@@ -217,6 +223,8 @@ def list_file(path: str) -> Dict[str, Any]:
                 }
             )
     return {"path": str(full_path), "files": all_files}
+
+
 
 @register_tool
 def edit_file(path: str, old_str: str, new_str: str) -> Dict[str, Any]:
@@ -247,3 +255,6 @@ def edit_file(path: str, old_str: str, new_str: str) -> Dict[str, Any]:
     except Exception as e:
         print(f"{ERROR_COLOR}{ERROR_ICON} Error editing file: {e}{RESET_COLOR}")
         return {"path": str(full_path), "action": "error", "error": str(e)}
+    
+
+print(json.dumps(tool_schema[2],indent=2))
