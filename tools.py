@@ -20,6 +20,8 @@ from ui import (
     DIR_ICON,
 )
 
+SUBPROCESS_TIMEOUT = 30
+
 tool_definitions = list()
 tool_schema = tool_definitions
 tool_registry = dict()
@@ -104,7 +106,7 @@ def run_bash_command(command: str) -> Dict[str, Any]|str:
     try:
         # Run the command and capture output
         result = subprocess.run(
-            command, shell=True, capture_output=True, text=True, check=True
+            command, shell=True, capture_output=True, text=True, check=True,timeout=SUBPROCESS_TIMEOUT
         )
         print(
             f"{SUCCESS_COLOR}{SUCCESS_ICON} Command executed successfully{RESET_COLOR}"
@@ -133,6 +135,13 @@ def run_bash_command(command: str) -> Dict[str, Any]|str:
             "success": False,
             "error": f"Command failed with exit code {e.returncode}",
         }
+    except subprocess.TimeoutExpired:
+        print(f"{ERROR_COLOR}{ERROR_ICON} The command {command} took too long to run!{RESET_COLOR}")
+        return {
+            "command": command,
+            "success": False,
+            "error": f"Command timed out after {SUBPROCESS_TIMEOUT} seconds!",
+        }
 
 @register_tool
 def run_existing_bash_script(script_path: str) -> Dict[str, Any]:
@@ -156,7 +165,7 @@ def run_existing_bash_script(script_path: str) -> Dict[str, Any]:
     try:
         # Run the script with bash
         result = subprocess.run(
-            ["bash", str(full_path)], capture_output=True, text=True, check=True
+            ["bash", str(full_path)], capture_output=True, text=True, check=True,timeout=SUBPROCESS_TIMEOUT
         )
         print(
             f"{SUCCESS_COLOR}{SUCCESS_ICON} Script executed successfully{RESET_COLOR}"
@@ -185,6 +194,14 @@ def run_existing_bash_script(script_path: str) -> Dict[str, Any]:
             "success": False,
             "error": f"Script failed with exit code {e.returncode}",
         }
+    except subprocess.TimeoutExpired:
+        print(f"{ERROR_COLOR}{ERROR_ICON} The script  took too long - {SUBPROCESS_TIMEOUT} seconds to run!{RESET_COLOR}")
+        return {
+            "script": script_path,
+            "success": False,
+            "error": f"The script took too long to run and timed out after {SUBPROCESS_TIMEOUT} seconds!",
+        }
+
 
 def resolve_abs_path(path_str: str) -> Path:
     path = Path(path_str).expanduser()
