@@ -1,5 +1,7 @@
+from datetime import time as t
 import os
 import warnings
+import time
 import logging
 from typing import Any, Dict, List
 from litellm import litellm
@@ -54,6 +56,7 @@ def print_error(context: str, message: str) -> None:
 
 
 def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str):
+    
     messages = build_messages(conversation)
     if model and api_key is not None:
         kwargs = {
@@ -68,17 +71,25 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
         # Allow overriding the LLM base URL without changing call sites.
         if llm_config.get("api_base"):
             kwargs["api_base"] = llm_config["api_base"]
-        try:
-            response = litellm.completion(**kwargs)
-            return response
-        except Exception as e:
-            error_msg = f"LLM call failed: {str(e)}"
-            print_error("LLM error", error_msg)
-            print(
-                f"{INFO_COLOR}Make sure you have set up your API keys in the .env file{RESET_COLOR}"
-            )
-            print(f"{INFO_COLOR}Current model: {model}{RESET_COLOR}")
-            return f"I encountered an error: {error_msg}. Please check your API key configuration."
+            
+        for attempt in range(3):
+            try:
+                response = litellm.completion(**kwargs)
+                return response
+            except Exception as e:
+                last_error = e
+                delay = 2**attempt
+                print(f"Attempt {attempt + 1} failed: {e}, retrying in {delay}s...")
+                time.sleep(delay)
+
+        error_msg = f"LLM call failed: {str(last_error)}"
+        print_error("LLM error", error_msg)
+        print(
+            f"{INFO_COLOR}Make sure you have set up your API keys in the .env file{RESET_COLOR}"
+        )
+        print(f"{INFO_COLOR}Current model: {model}{RESET_COLOR}")
+        return f"I encountered an error: {error_msg}. Please check your API key configuration."
+    
     else:
         error_msg = "Missing environment variable: MODEL or API_KEY"
         print_error("Configuration error", error_msg)
