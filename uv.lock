@@ -1336,8 +1336,8 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dotenv", specifier = ">=0.9.9" },
-    { name = "litellm", specifier = ">=1.82.2" },
+    { name = "dotenv", specifier = "==0.9.9" },
+    { name = "litellm", specifier = "==1.82.2" },
 ]
 
 [[package]]
