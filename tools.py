@@ -20,7 +20,8 @@ from ui import (
     DIR_ICON,
 )
 
-tool_schema = list()
+tool_definitions = list()
+tool_schema = tool_definitions
 tool_registry = dict()
 
 # Decorator to register_tool names, their func and creating a tool_schema for each on the fly.
@@ -30,12 +31,12 @@ def register_tool(func:types.FunctionType):
 
     single_schema = dict()
 
-    single_schema["type"]="function"
-    single_schema["name"]=func.__name__
+    single_schema["type"] = "function"
+    single_schema["name"] = func.__name__
     single_schema["description"] = func.__doc__ or "No description provided"
 
     # to undertand what's going here, you need to look at what a typical schema looks like!
-    single_schema["parameters"]= dict()
+    single_schema["parameters"] = dict()
     
 
     hints = get_type_hints(func)
@@ -60,7 +61,7 @@ def register_tool(func:types.FunctionType):
         "required": required
     }
 
-    tool_schema.append(single_schema)
+    tool_definitions.append(single_schema)
 
     return func
 
@@ -191,6 +192,23 @@ def resolve_abs_path(path_str: str) -> Path:
         path = (Path.cwd() / path).resolve()
     return path
 
+
+def get_tool_schema(model: str | None = None) -> list[dict]:
+    """Return tools in the schema format expected by the current provider."""
+    if model and "deepseek" in model.lower():
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool["name"],
+                    "description": tool["description"],
+                    "parameters": tool["parameters"],
+                },
+            }
+            for tool in tool_definitions
+        ]
+    return [tool.copy() for tool in tool_definitions]
+
 @register_tool
 def read_file(filename: str) -> Dict[str, Any]:
     """ A simple too to read any kind of files, just provide the filename with its extension"""
@@ -257,3 +275,4 @@ def edit_file(path: str, old_str: str, new_str: str) -> Dict[str, Any]:
     
 
 print(json.dumps(tool_schema[2],indent=2))
+print(json.dumps(get_tool_schema('deepseek'),indent=2))

@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 from litellm import litellm
 import json
 from tools import (
-    tool_schema,
+    get_tool_schema,
     tool_registry
 )
 from prompts import SYSTEM_PROMPT
@@ -21,7 +21,6 @@ from ui import (
     TOOL_ICON,
     SUCCESS_ICON,
     ERROR_ICON,
-    THINKING_ICON,
 )
 
 # Disable pydantic warnings
@@ -63,7 +62,7 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
             "messages": messages,
             "max_tokens": 2000,
             "temperature": 0.1,
-            "tools": tool_schema,
+            "tools": get_tool_schema(model),
         }
 
         # Allow overriding the LLM base URL without changing call sites.
