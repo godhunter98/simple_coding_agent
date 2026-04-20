@@ -259,7 +259,6 @@ def list_file(path: str) -> Dict[str, Any]:
     return {"path": str(full_path), "files": all_files}
 
 
-
 @register_tool
 def edit_file(path: str, old_str: str, new_str: str) -> Dict[str, Any]:
     full_path = resolve_abs_path(path)
@@ -290,6 +289,3 @@ def edit_file(path: str, old_str: str, new_str: str) -> Dict[str, Any]:
         print(f"{ERROR_COLOR}{ERROR_ICON} Error editing file: {e}{RESET_COLOR}")
         return {"path": str(full_path), "action": "error", "error": str(e)}
     
-
-print(json.dumps(tool_schema[2],indent=2))
-print(json.dumps(get_tool_schema('deepseek'),indent=2))

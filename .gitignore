@@ -15,7 +15,6 @@ wheels/
 # Linter Files
 .ruff_cache/
 docs/
-tests/
 
 # notes
 bug_fixes_summary.txt
