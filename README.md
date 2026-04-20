@@ -2,6 +2,9 @@
 
 A lightweight CLI coding assistant powered by LLMs via [litellm](https://github.com/BerriAI/litellm).
 
+![Uploading image.png…]()
+
+
 ## Features
 
 - 5 tools: read, list, edit files · run bash commands · run bash scripts
