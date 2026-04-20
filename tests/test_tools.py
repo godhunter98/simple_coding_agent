@@ -1,6 +1,9 @@
+import pathlib
+import pathlib
+import tempfile
 from unittest import result
 import tempfile
-from tools import is_unsafe, read_file, edit_file
+from tools import is_unsafe, read_file, edit_file, list_file
 
 def test_is_unsafe():
     assert is_unsafe("rm -rf/") is True
@@ -8,6 +11,18 @@ def test_is_unsafe():
     assert is_unsafe("ls -la") is False
     assert is_unsafe("sudo apt install") is True
     assert is_unsafe("echo hello") is False
+
+def test_list_file():
+    with tempfile.TemporaryDirectory() as temp_directory:
+        path = pathlib.Path(temp_directory)
+        result = list_file(path)
+        with tempfile.NamedTemporaryFile(dir=path) as temp_file:
+            new_result = list_file(path)
+            assert len(new_result["files"]) == 1
+            assert new_result["files"][0]["filename"] == pathlib.Path(temp_file.name).name
+
+        assert result["path"] == str(path)
+             
 
 def test_read_file():
     import tempfile, pathlib, os  # noqa: E401
