@@ -1,9 +1,7 @@
 import pathlib
-import pathlib
 import tempfile
-from unittest import result
-import tempfile
-from tools import is_unsafe, read_file, edit_file, list_file
+from tools import is_unsafe, read_file, edit_file, list_file, run_bash_command, run_existing_bash_script
+from unittest.mock import Mock,patch
 
 def test_is_unsafe():
     assert is_unsafe("rm -rf/") is True
@@ -66,3 +64,21 @@ def test_edit_file():
         result_empty = edit_file("", "old", "new")
         assert result_empty["action"] == "error"
         assert "Is a directory" in result_empty["error"]
+
+
+@patch("builtins.input",return_value="n")
+def test_unsafe_bash_command_unconfirmed(mock_input):
+    result = run_bash_command("rm -rf /")
+    assert result["success"] is False
+    assert result["error"] == "Cancelled by user"
+
+@patch("tools.subprocess.run")
+@patch("builtins.input",return_value="y")
+def test_unsafe_bash_command_confirmed(mock_input,mock_subprocess):
+    mock_subprocess.return_value.stdout = "Fake output"
+    mock_subprocess.return_value.stderr = ""
+    mock_subprocess.return_value.returncode = 0
+    result = run_bash_command("rm -rf /")
+    assert result["success"] is True
+    mock_subprocess.assert_called_once()
+
