@@ -1,7 +1,7 @@
 import pathlib
 import tempfile
 from tools import is_unsafe, read_file, edit_file, list_file, run_bash_command, run_existing_bash_script
-from unittest.mock import Mock,patch
+from unittest.mock import patch
 
 def test_is_unsafe():
     assert is_unsafe("rm -rf/") is True
@@ -23,7 +23,6 @@ def test_list_file():
              
 
 def test_read_file():
-    import tempfile, pathlib, os  # noqa: E401
     with tempfile.NamedTemporaryFile() as temp_file:
         temp_file.write(b"Hello World, how you doing?")
         temp_file.flush()
@@ -68,9 +67,10 @@ def test_edit_file():
 
 @patch("builtins.input",return_value="n")
 def test_unsafe_bash_command_unconfirmed(mock_input):
-    result = run_bash_command("rm -rf /")
-    assert result["success"] is False
-    assert result["error"] == "Cancelled by user"
+    with tempfile.NamedTemporaryFile() as temp_file:
+        result = run_bash_command(f"rm -rf {temp_file.name}")
+        assert result["success"] is False
+        assert result["error"] == "Cancelled by user"
 
 @patch("tools.subprocess.run")
 @patch("builtins.input",return_value="y")
@@ -78,7 +78,8 @@ def test_unsafe_bash_command_confirmed(mock_input,mock_subprocess):
     mock_subprocess.return_value.stdout = "Fake output"
     mock_subprocess.return_value.stderr = ""
     mock_subprocess.return_value.returncode = 0
-    result = run_bash_command("rm -rf /")
-    assert result["success"] is True
-    mock_subprocess.assert_called_once()
+    with tempfile.NamedTemporaryFile() as temp_file:
+        result = run_bash_command(f"rm -rf {temp_file.name}")
+        assert result["success"] is True
+        mock_subprocess.assert_called_once()
 
