@@ -2,6 +2,7 @@ import pathlib
 import tempfile
 from tools import is_unsafe, read_file, edit_file, list_file, run_bash_command, run_existing_bash_script
 from unittest.mock import patch
+import subprocess
 
 def test_is_unsafe():
     assert is_unsafe("rm -rf/") is True
@@ -83,3 +84,20 @@ def test_unsafe_bash_command_confirmed(mock_input,mock_subprocess):
         assert result["success"] is True
         mock_subprocess.assert_called_once()
 
+@patch("tools.subprocess.run")
+def test_bash_command_timeout(mock_subprocess):
+    # side_effect is a good way to expect dynamic behaviour when we run our bash command,
+    # here we patched it to raise a subprocess.TimeoutExpired error as soon as we hit the run of our command
+    mock_subprocess.side_effect = subprocess.TimeoutExpired(cmd="Fake", timeout=31)
+
+    result = run_bash_command("echo anything")
+    assert result["success"] is False
+    assert "timed out" in result["error"]
+
+def test_safe_bash_command():
+    command = "echo hello world!"
+    if not is_unsafe(command):
+        result = run_bash_command(command)
+        assert result["stdout"].strip() == "hello world!"
+        assert result["success"] == True
+        assert result["returncode"]== 0
