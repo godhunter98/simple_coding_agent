@@ -1,3 +1,5 @@
+from unittest import result
+import tempfile
 import pathlib
 import tempfile
 from tools import is_unsafe, read_file, edit_file, list_file, run_bash_command, run_existing_bash_script
@@ -101,3 +103,38 @@ def test_safe_bash_command():
         assert result["stdout"].strip() == "hello world!"
         assert result["success"] == True
         assert result["returncode"]== 0
+
+
+def test_run__safe_existing_bash_script():
+    with tempfile.NamedTemporaryFile() as temp_file:
+        temp_file.write(b"#!/bin/bash\necho hello")
+        temp_file.flush()
+        result = run_existing_bash_script(temp_file.name)
+        assert result["success"] is True
+        assert result["stdout"].strip() == "hello"
+
+
+@patch("builtins.input",return_value="n")
+def test_run_existing_unsafe_bash_script_deny(mock_input):
+    with tempfile.NamedTemporaryFile() as temp_file:
+        temp_file.write(b"#!/bin/bash\nrm -rf /")
+        temp_file.flush()
+        result = run_existing_bash_script(temp_file.name)
+        assert result["success"] is False
+        assert ("Cancelled") in result["error"]
+
+@patch("tools.subprocess.run")
+@patch("builtins.input",return_value="y")
+def test_run_existing_unsafe_bash_script_accept(mock_input,mock_subprocess):
+    mock_subprocess.return_value.returncode = 0
+    
+    # we're trying something extremely risky here but we're safe as we're mocking the subprocess module
+    with tempfile.NamedTemporaryFile() as temp_file:
+        temp_file.write(b"#!/bin/bash\nrm -rf /")
+        temp_file.flush()
+        result = run_existing_bash_script(temp_file.name)
+
+        assert result["success"] is True
+        
+        mock_subprocess.assert_called_once()
+
