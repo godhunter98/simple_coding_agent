@@ -18,6 +18,8 @@ docs/
 
 # notes
 bug_fixes_summary.txt
+test.py
+responses.txt
 
 # test files 
 play.py

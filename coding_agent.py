@@ -55,7 +55,7 @@ def print_error(context: str, message: str) -> None:
     print(f"{ERROR_COLOR}{ERROR_ICON} {context}: {message}{RESET_COLOR}")
 
 
-def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str):
+def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str,spinner:Spinner=None):
     
     messages = build_messages(conversation)
     if model and api_key is not None:
@@ -66,6 +66,7 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
             "max_tokens": 2000,
             "temperature": 0.1,
             "tools": get_tool_schema(model),
+            "stream":True
         }
 
         # Allow overriding the LLM base URL without changing call sites.
@@ -75,7 +76,22 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
         for attempt in range(3):
             try:
                 response = litellm.completion(**kwargs)
-                return response
+                chunks = []
+                for chunk in response:
+                    delta = chunk.choices[0].delta
+                    if delta.content:
+                        if spinner:
+                            spinner.stop()
+                            spinner = None  # Prevent repeated stops
+                            print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} ", end="", flush=True)
+                        print(delta.content, end="", flush=True)
+                    chunks.append(chunk)
+                print()
+
+                full_response = litellm.stream_chunk_builder(chunks)
+
+                return full_response
+                
             except Exception as e:
                 last_error = e
                 delay = 2**attempt
@@ -149,9 +165,6 @@ def handle_assistant_message(assistant_message, conversation: List[Dict[str, Any
     content = getattr(assistant_message, "content", "") or ""
     tool_calls = getattr(assistant_message, "tool_calls", None) or []
 
-    if content.strip():
-        print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} {content}")
-
     if not tool_calls:
         conversation.append({"role": "assistant", "content": content})
         return 
@@ -205,7 +218,7 @@ def agent_loop(model: str, api_key: str,max_iterations:int = 15):
         while current_iteration<=max_iterations:
             current_iteration+=1
 
-            response = llm_completions(conversation, model, api_key)
+            response = llm_completions(conversation, model, api_key,spinner=spinner)
             spinner.stop()
             if isinstance(response, str):
                 print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} {response}")
