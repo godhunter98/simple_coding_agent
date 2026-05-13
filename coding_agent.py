@@ -77,7 +77,12 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
             try:
                 response = litellm.completion(**kwargs)
                 chunks = []
+                request_time = time.perf_counter()
+                start_time = None
                 for chunk in response:
+                    if start_time is None:
+                            start_time= time.perf_counter()
+                            ttft = start_time-request_time
                     delta = chunk.choices[0].delta
                     if delta.content:
                         if spinner:
@@ -86,9 +91,21 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
                             print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} ", end="", flush=True)
                         print(delta.content, end="", flush=True)
                     chunks.append(chunk)
+                end_time = time.perf_counter()
                 print()
 
                 full_response = litellm.stream_chunk_builder(chunks)
+
+                if start_time is not None:
+                    duration = end_time-start_time
+                    tokens = 0
+                    if hasattr(full_response, "usage") and full_response.usage:
+                        tokens = getattr(full_response.usage, "completion_tokens", 0)
+                    if tokens > 0 and duration > 0:
+                        tps = tokens / duration
+                        print(f"{INFO_COLOR}  [ {ttft:.1f}s - 1st token ]{RESET_COLOR}")
+                        print(f"{INFO_COLOR}  [ {tps:.1f} toks/s | {tokens} tokens in {duration:.2f}s ]{RESET_COLOR}\n")
+                        # print(f"{INFO_COLOR}  [ {tps:.1f} toks/s ]{RESET_COLOR}\n")    
 
                 return full_response
                 
