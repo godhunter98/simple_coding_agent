@@ -55,7 +55,7 @@ def print_error(context: str, message: str) -> None:
     print(f"{ERROR_COLOR}{ERROR_ICON} {context}: {message}{RESET_COLOR}")
 
 
-def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str,spinner:Spinner=None):
+def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str,spinner:Spinner=None,show_ttft=True):
     
     messages = build_messages(conversation)
     if model and api_key is not None:
@@ -79,16 +79,20 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
                 chunks = []
                 request_time = time.perf_counter()
                 start_time = None
+                text_token_count = 0
                 for chunk in response:
                     if start_time is None:
-                            start_time= time.perf_counter()
-                            ttft = start_time-request_time
+                        start_time= time.perf_counter()
+                        ttft = start_time-request_time
                     delta = chunk.choices[0].delta
                     if delta.content:
+                        # we can roughly model each chunk as its own token
+                        text_token_count+=1
                         if spinner:
                             spinner.stop()
-                            spinner = None  # Prevent repeated stops
                             print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} ", end="", flush=True)
+                            spinner = None  # We don't want multiple stops or hitting the above print more than once, hence we set None.
+
                         print(delta.content, end="", flush=True)
                     chunks.append(chunk)
                 end_time = time.perf_counter()
@@ -96,15 +100,12 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
 
                 full_response = litellm.stream_chunk_builder(chunks)
 
-                if start_time is not None:
-                    duration = end_time-start_time
-                    tokens = 0
-                    if hasattr(full_response, "usage") and full_response.usage:
-                        tokens = getattr(full_response.usage, "completion_tokens", 0)
-                    if tokens > 0 and duration > 0:
-                        tps = tokens / duration
-                        print(f"{INFO_COLOR}  [ {ttft:.1f}s - 1st token ]{RESET_COLOR}")
-                        print(f"{INFO_COLOR}  [ {tps:.1f} toks/s | {tokens} tokens in {duration:.2f}s ]{RESET_COLOR}\n")
+                if start_time is not None and text_token_count > 0:
+                        duration = end_time-start_time
+                        tps = text_token_count / duration
+                        if show_ttft:
+                            print(f"{INFO_COLOR}  [ {ttft:.1f}s - 1st token ]{RESET_COLOR}")
+                        print(f"{INFO_COLOR}  [ {tps:.1f} toks/s | {text_token_count} tokens in {duration:.2f}s ]{RESET_COLOR}\n")
                         # print(f"{INFO_COLOR}  [ {tps:.1f} toks/s ]{RESET_COLOR}\n")    
 
                 return full_response
@@ -211,6 +212,8 @@ def agent_loop(model: str, api_key: str,max_iterations:int = 15):
 
     conversation = [{"role": "system", "content": SYSTEM_PROMPT}]
     
+    show_ttft = True
+
     while True:
         try:
             user_input = input(f"\n{YOU_COLOR}You:{RESET_COLOR} ")
@@ -235,8 +238,9 @@ def agent_loop(model: str, api_key: str,max_iterations:int = 15):
         while current_iteration<=max_iterations:
             current_iteration+=1
 
-            response = llm_completions(conversation, model, api_key,spinner=spinner)
-            spinner.stop()
+            response = llm_completions(conversation, model, api_key,spinner=spinner,show_ttft=show_ttft)
+            show_ttft=False
+
             if isinstance(response, str):
                 print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} {response}")
                 break
