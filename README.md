@@ -11,6 +11,7 @@ A lightweight CLI coding assistant powered by LLMs via [litellm](https://github.
 - Provider-agnostic — works with OpenAI, Anthropic, Gemini, DeepSeek, local models
 - Safety checks on shell commands with warn + confirm prompt
 - Animated terminal UI — block-letter banner, braille spinner
+- Bunch of tests to test functionality
 
 ## Installation
 
