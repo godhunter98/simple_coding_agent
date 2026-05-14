@@ -24,3 +24,9 @@ responses.txt
 # test files 
 play.py
 decorators.py
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+schema.md
