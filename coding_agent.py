@@ -6,6 +6,8 @@ import logging
 from typing import Any, Dict, List
 from litellm import litellm
 import json
+from rich.live import Live
+from rich.markdown import Markdown
 from tools import (
     get_tool_schema,
     tool_registry
@@ -77,36 +79,41 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
             try:
                 response = litellm.completion(**kwargs)
                 chunks = []
+
                 request_time = time.perf_counter()
                 start_time = None
                 text_token_count = 0
-                for chunk in response:
-                    if start_time is None:
-                        start_time= time.perf_counter()
-                        ttft = start_time-request_time
-                    delta = chunk.choices[0].delta
-                    if delta.content:
-                        # we can roughly model each chunk as its own token
-                        text_token_count+=1
-                        if spinner:
-                            spinner.stop()
-                            print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR} ", end="", flush=True)
-                            spinner = None  # We don't want multiple stops or hitting the above print more than once, hence we set None.
 
-                        print(delta.content, end="", flush=True)
-                    chunks.append(chunk)
+                # Stop spinner before Live takes over the terminal
+                if spinner:
+                    spinner.stop()
+                    spinner = None
+
+                print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR}")
+                accumulated_text = ""
+                with Live("", refresh_per_second=15, vertical_overflow="visible") as live:
+                    for chunk in response:
+                        if start_time is None:
+                            start_time = time.perf_counter()
+                            ttft = start_time - request_time
+                        delta = chunk.choices[0].delta
+                        if delta.content:
+                            # we can roughly model each chunk as its own token
+                            text_token_count += 1
+                            accumulated_text += delta.content
+                            live.update(Markdown(accumulated_text))
+                        chunks.append(chunk)
+
                 end_time = time.perf_counter()
-                print()
 
                 full_response = litellm.stream_chunk_builder(chunks)
 
                 if start_time is not None and text_token_count > 0:
-                        duration = end_time-start_time
-                        tps = text_token_count / duration
-                        if show_ttft:
-                            print(f"{INFO_COLOR}  [ {ttft:.1f}s - 1st token ]{RESET_COLOR}")
-                        print(f"{INFO_COLOR}  [ {tps:.1f} toks/s | {text_token_count} tokens in {duration:.2f}s ]{RESET_COLOR}\n")
-                        # print(f"{INFO_COLOR}  [ {tps:.1f} toks/s ]{RESET_COLOR}\n")    
+                    duration = end_time - start_time
+                    tps = text_token_count / duration
+                    if show_ttft:
+                        print(f"{INFO_COLOR}  [ {ttft:.1f}s - 1st token ]{RESET_COLOR}")
+                    print(f"{INFO_COLOR}  [ {tps:.1f} toks/s | {text_token_count} tokens in {duration:.2f}s ]{RESET_COLOR}\n")
 
                 return full_response
                 
