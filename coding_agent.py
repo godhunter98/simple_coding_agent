@@ -68,7 +68,8 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
             "max_tokens": 2000,
             "temperature": 0.1,
             "tools": get_tool_schema(model),
-            "stream":True
+            "stream":True,
+            "thinking": {"type": "disabled"}
         }
 
         # Allow overriding the LLM base URL without changing call sites.
@@ -189,19 +190,26 @@ def run_tool_call(
 def handle_assistant_message(assistant_message, conversation: List[Dict[str, Any]]) -> None:
     content = getattr(assistant_message, "content", "") or ""
     tool_calls = getattr(assistant_message, "tool_calls", None) or []
+    # Capture reasoning_content if present (DeepSeek thinking mode)
+    reasoning_content = getattr(assistant_message, "reasoning_content", None)
 
     if not tool_calls:
-        conversation.append({"role": "assistant", "content": content})
+        msg = ({"role": "assistant", "content": content})
+        if reasoning_content is not None:
+            msg["reasoning_content"] = reasoning_content
+        conversation.append(msg)
         return 
 
     # Preserve the model's assistant message before executing any tool calls.
-    conversation.append(
-        {
-            "role": "assistant",
-            "content": content,
-            "tool_calls": tool_calls,  # type: ignore
-        }
-    )
+    msg = {
+        "role": "assistant",
+        "content": content,
+        "tool_calls": tool_calls,
+    }
+    
+    if reasoning_content is not None:
+        msg["reasoning_content"] = reasoning_content
+    conversation.append(msg)
 
     print(
         f"{TOOL_COLOR}🔄 Executing {len(tool_calls)} tool{'s' if len(tool_calls) > 1 else ''}...{RESET_COLOR}"
