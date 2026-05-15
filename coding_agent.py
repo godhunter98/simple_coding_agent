@@ -114,7 +114,10 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
                     tps = text_token_count / duration
                     if show_ttft:
                         print(f"{INFO_COLOR}  [ {ttft:.1f}s - 1st token ]{RESET_COLOR}")
-                    print(f"{INFO_COLOR}  [ {tps:.1f} toks/s | {text_token_count} tokens in {duration:.2f}s ]{RESET_COLOR}\n")
+                    if kwargs.get("thinking") == {"type": "disabled"}:
+                        print(f"{INFO_COLOR}  [ {tps:.1f} toks/s | {text_token_count} tokens in {duration:.2f}s | Thinking_Mode 🧠: ❌ ]{RESET_COLOR}\n")
+                    else:
+                        print(f"{INFO_COLOR}  [ {tps:.1f} toks/s | {text_token_count} tokens in {duration:.2f}s | Thinking_Mode 🧠 : ✅ ]{RESET_COLOR}\n")
 
                 return full_response
                 
