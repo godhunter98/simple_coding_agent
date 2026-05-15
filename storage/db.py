@@ -31,3 +31,15 @@ cursor.execute(
         )
     '''
     )
+
+cursor.execute(
+    '''
+    CREATE TABLE IF NOT EXISTS tool_calls (
+        tool_id INTEGER PRIMARY KEY NOT NULL,
+        message_id INTEGER REFERENCES messages(message_id),
+        tool_name VARCHAR,
+        tool_args VARCHAR,
+        tool_output VARCHAR
+    )
+    '''
+    )
