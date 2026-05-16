@@ -5,7 +5,7 @@ from contextlib import contextmanager
 DB_PATH = pathlib.Path(__file__).parent/"agent_persistence.db"
 
 @contextmanager
-def get_db_cursor():
+def get_db_cursor() -> sqlite3.Cursor:
     """Context manager for database connections. Handles commit/rollback automatically."""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -19,25 +19,47 @@ def get_db_cursor():
     finally:
         conn.close()
 
-def log_conversation(summary:str,model:str,total_tokens:int,cost_per_token:dict = None) -> int | None:
-    """
-    Create a new conversation and return its ID
-    """
+def start_conversation(model:str) -> int | None:
+    """Create a single row before the conversation starts"""
+    with get_db_cursor() as cursor:
+        cursor.execute('''
+        INSERT INTO conversations
+        (model)
+        VALUES (?)
+        ''',
+        (model,)
+        )
+        return cursor.lastrowid
+
+def update_conversation_stats(conversation_id: int, total_tokens: int = 0, cost_per_token: dict = None):
+    """Update token count and calculate approx cost for a conversation."""
     if cost_per_token is None:
         cost_per_token = {"deepseek-v4-flash": 0.25, "deepseek-v4-pro": 0.70}
-    approx_cost = cost_per_token.get(model,0.0)*total_tokens
-    
+
     with get_db_cursor() as cursor:
         cursor.execute(
             '''
-            INSERT INTO conversations 
-            (summary,model,total_tokens,approx_cost)
-            VALUES (?, ?, ?, ?)
+            SELECT model FROM conversations WHERE conversation_id = ?
             ''',
-            (summary,model,total_tokens,approx_cost),
-        )
+            (conversation_id,)
+            )
+        row = cursor.fetchone()
+
+        if not row:
+            return
         
-        return cursor.lastrowid 
+        model = row["model"]
+
+        approx_cost = cost_per_token.get(model,0.0) * total_tokens
+        
+        cursor.execute('''
+        UPDATE conversations
+        SET total_tokens = ?, approx_cost = ?
+        WHERE conversation_id = ?
+        ''',
+        (total_tokens, approx_cost, conversation_id)
+        )
+
 
 def add_message(conversation_id:int, role:str, content:str) -> int | None:
     """
