@@ -1,10 +1,23 @@
 import pathlib
 import sqlite3
+from contextlib import contextmanager
 
-conn = sqlite3.connect(pathlib.Path(__file__).parent/"agent_persistence.db")
-conn.row_factory = sqlite3.Row
-cursor = conn.cursor()
+DB_PATH = pathlib.Path(__file__).parent/"agent_persistence.db"
 
+@contextmanager
+def get_db_cursor():
+    """Context manager for database connections. Handles commit/rollback automatically."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        yield cursor
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 def log_conversation(summary:str,model:str,total_tokens:int,cost_per_token:dict = None) -> int | None:
     """
@@ -14,71 +27,74 @@ def log_conversation(summary:str,model:str,total_tokens:int,cost_per_token:dict 
         cost_per_token = {"deepseek-v4-flash": 0.25, "deepseek-v4-pro": 0.70}
     approx_cost = cost_per_token.get(model,0.0)*total_tokens
     
-    cursor.execute(
-        '''
-        INSERT INTO conversations 
-        (summary,model,total_tokens,approx_cost)
-        VALUES (?, ?, ?, ?)
-        ''',
-        (summary,model,total_tokens,approx_cost),
-    )
-    conn.commit()
-    return cursor.lastrowid 
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            '''
+            INSERT INTO conversations 
+            (summary,model,total_tokens,approx_cost)
+            VALUES (?, ?, ?, ?)
+            ''',
+            (summary,model,total_tokens,approx_cost),
+        )
+        
+        return cursor.lastrowid 
 
 def add_message(conversation_id:int, role:str, content:str) -> int | None:
     """
     Add message to a converation
     """
-    cursor.execute(
-        '''
-        INSERT INTO messages 
-        (conversation_id, role, content)
-        VALUES (?, ?, ?)
-        ''',
-        (conversation_id,role,content),
-    )
-    conn.commit()
-    return cursor.lastrowid
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            '''
+            INSERT INTO messages 
+            (conversation_id, role, content)
+            VALUES (?, ?, ?)
+            ''',
+            (conversation_id,role,content),
+        )
+        return cursor.lastrowid
 
 def add_tool_call(message_id: int, tool_name: str, tool_args: str, tool_output: str) -> int | None:
     """Log a tool invocation."""
-    cursor.execute(
-        """
-        INSERT INTO tool_calls (message_id, tool_name, tool_args, tool_output)
-        VALUES (?, ?, ?, ?)
-        """,
-        (message_id, tool_name, tool_args, tool_output),
-    )
-    conn.commit()
-    return cursor.lastrowid
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO tool_calls (message_id, tool_name, tool_args, tool_output)
+            VALUES (?, ?, ?, ?)
+            """,
+            (message_id, tool_name, tool_args, tool_output),
+        )
+        return cursor.lastrowid
 
 def mark_conversation_completed(conversation_id: int, final_summary: str = None):
     """Mark a conversation as completed."""
-    cursor.execute(
-        """
-        UPDATE conversations 
-        SET status = 'completed', ended_at = CURRENT_TIMESTAMP, summary = COALESCE(?, summary)
-        WHERE conversation_id = ?
-        """,
-        (final_summary, conversation_id),
-    )
-    conn.commit()
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE conversations 
+            SET status = 'completed', ended_at = CURRENT_TIMESTAMP, summary = COALESCE(?, summary)
+            WHERE conversation_id = ?
+            """,
+            (final_summary, conversation_id),
+        )
 
 def get_all_conversations():
     """Retrieve all conversations."""
-    cursor.execute(
-        '''
-        SELECT * FROM conversations ORDER BY started_at DESC
-        '''
-    )
-    return cursor.fetchall()
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            '''
+            SELECT * FROM conversations ORDER BY started_at DESC
+            '''
+        )
+        return cursor.fetchall()
 
 def get_conversation_messages(conversation_id: int):
     """Retrieve all messages in a conversations."""
-    cursor.execute(
-        '''
-        SELECT * FROM messages WHERE conversation_id = ?
-        ''',
-        (conversation_id,),        
-    )
-    return cursor.fetchall()
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            '''
+            SELECT * FROM messages WHERE conversation_id = ?
+            ''',
+            (conversation_id,),        
+        )
+        return cursor.fetchall()
