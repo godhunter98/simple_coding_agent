@@ -1,4 +1,3 @@
-from datetime import time as t
 import os
 import warnings
 import time
@@ -8,6 +7,7 @@ from litellm import litellm
 import json
 from rich.live import Live
 from rich.markdown import Markdown
+from storage import queries
 from tools import (
     get_tool_schema,
     tool_registry
@@ -119,7 +119,7 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
                     else:
                         print(f"{INFO_COLOR}  [ {tps:.1f} toks/s | {text_token_count} tokens in {duration:.2f}s | Thinking_Mode 🧠 : ✅ ]{RESET_COLOR}\n")
 
-                return full_response
+                return full_response, text_token_count
                 
             except Exception as e:
                 last_error = e
@@ -133,7 +133,7 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
             f"{INFO_COLOR}Make sure you have set up your API keys in the .env file{RESET_COLOR}"
         )
         print(f"{INFO_COLOR}Current model: {model}{RESET_COLOR}")
-        return f"I encountered an error: {error_msg}. Please check your API key configuration."
+        return f"I encountered an error: {error_msg}. Please check your API key configuration.",0
     
     else:
         error_msg = "Missing environment variable: MODEL or API_KEY"
@@ -141,11 +141,11 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
         print(
             f"{INFO_COLOR}Please set MODEL and API_KEY in your .env file{RESET_COLOR}"
         )
-        return f"I encountered an error: {error_msg}. Please check your .env file configuration."
+        return f"I encountered an error: {error_msg}. Please check your .env file configuration.",0
 
 
 def run_tool_call(
-    tool_call, conversation: List[Dict[str, Any]], index: int
+    tool_call, conversation: List[Dict[str, Any]], index: int , db_msg_id: int
 ) -> None:
     tool_name = tool_call.function.name
     try:
@@ -169,6 +169,8 @@ def run_tool_call(
 
         try:
             resp = tool(**tool_args)
+            # tool args and tool resp are dicts, but sqlite needs a string, we dump them!
+            queries.add_tool_call(db_msg_id,tool_name,json.dumps(tool_args),json.dumps(resp))
             conversation.append(
                 {
                     "role": "tool",
@@ -190,11 +192,13 @@ def run_tool_call(
     except json.JSONDecodeError:
         print("The model sent back a broken JSON string!")
 
-def handle_assistant_message(assistant_message, conversation: List[Dict[str, Any]]) -> None:
+def handle_assistant_message(assistant_message, conversation: List[Dict[str, Any]],conversation_id: int) -> None:
     content = getattr(assistant_message, "content", "") or ""
     tool_calls = getattr(assistant_message, "tool_calls", None) or []
     # Capture reasoning_content if present (DeepSeek thinking mode)
     reasoning_content = getattr(assistant_message, "reasoning_content", None)
+
+    db_msg_id = queries.add_message(conversation_id,"assistant",content)
 
     if not tool_calls:
         msg = ({"role": "assistant", "content": content})
@@ -219,7 +223,7 @@ def handle_assistant_message(assistant_message, conversation: List[Dict[str, Any
     )
 
     for index, tool_call in enumerate(tool_calls, 1):
-        run_tool_call(tool_call, conversation, index)
+        run_tool_call(tool_call, conversation, index, db_msg_id)
 
 
 def agent_loop(model: str, api_key: str,max_iterations:int = 15):
@@ -232,21 +236,29 @@ def agent_loop(model: str, api_key: str,max_iterations:int = 15):
     
     show_ttft = True
 
+    conv_row_id = queries.start_conversation(model)
+
+    session_total_tokens = 0
+
     while True:
         try:
             user_input = input(f"\n{YOU_COLOR}You:{RESET_COLOR} ")
         except (KeyboardInterrupt, EOFError):
             print(f"\n{INFO_COLOR}Goodbye! 👋{RESET_COLOR}")
+            queries.mark_conversation_completed(conv_row_id)
             break
 
         if not user_input.strip():
             continue
 
         if user_input.lower() in ["exit", "quit"]:
+            queries.mark_conversation_completed(conv_row_id)
             print(f"\n{INFO_COLOR}Goodbye! 👋{RESET_COLOR}")
             break
 
         conversation.append({"role": "user", "content": user_input.strip()})
+
+        queries.add_message(conversation_id=conv_row_id,role="user",content=user_input.strip())
 
         spinner = Spinner()
         spinner.start()
@@ -256,7 +268,11 @@ def agent_loop(model: str, api_key: str,max_iterations:int = 15):
         while current_iteration<=max_iterations:
             current_iteration+=1
 
-            response = llm_completions(conversation, model, api_key,spinner=spinner,show_ttft=show_ttft)
+            response,tokens = llm_completions(conversation, model, api_key,spinner=spinner,show_ttft=show_ttft)
+            
+            session_total_tokens += tokens
+            queries.update_conversation_stats(conv_row_id, session_total_tokens)
+
             show_ttft=False
 
             if isinstance(response, str):
@@ -269,7 +285,7 @@ def agent_loop(model: str, api_key: str,max_iterations:int = 15):
                     # Only the first choice is used for this CLI loop.
                     assistant_message = response.choices[0].message  # type: ignore
                     # The response is being generated by the assistant, depending on whether there are tool calls or not.
-                    handle_assistant_message(assistant_message,conversation)
+                    handle_assistant_message(assistant_message,conversation,conv_row_id)
                     if not assistant_message.tool_calls:
                         break
                     spinner.start()
