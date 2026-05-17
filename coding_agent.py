@@ -225,6 +225,35 @@ def handle_assistant_message(assistant_message, conversation: List[Dict[str, Any
     for index, tool_call in enumerate(tool_calls, 1):
         run_tool_call(tool_call, conversation, index, db_msg_id)
 
+def generate_conversation_summary(conversation: List[Dict[str,Any]],model:str,api_key:str) -> str:
+    '''Generate a summary from the completed conversation.'''
+    print(f"\n{INFO_COLOR}Saving conversation...{RESET_COLOR}")
+    
+    # We use build_messages to safely format the history
+    summary_convo = build_messages(conversation)
+    summary_convo.append({
+        "role": "user", 
+        "content": "Summarize this session in exactly 6 to 8 words. Do not use punctuation. Do not write anything else."
+    })
+    
+    kwargs = {
+        "model": model,
+        "api_key": api_key,
+        "messages": summary_convo,
+        "max_tokens": 150, 
+        "temperature": 0.2,    
+        "stream": False,
+        "thinking": {"type": "disabled"} 
+    }
+
+    try:
+        response = litellm.completion(**kwargs)
+        content = response.choices[0].message.content
+        return content.strip() if content else "Session ended before discussion."
+    except Exception as e:
+        print(f"Error generating summary: {e}")
+        return "Summary could not be generated."
+
 
 def agent_loop(model: str, api_key: str,max_iterations:int = 15):
     print(
@@ -252,7 +281,8 @@ def agent_loop(model: str, api_key: str,max_iterations:int = 15):
             continue
 
         if user_input.lower() in ["exit", "quit"]:
-            queries.mark_conversation_completed(conv_row_id)
+            conv_summary = generate_conversation_summary(conversation,model,api_key)
+            queries.mark_conversation_completed(conv_row_id,conv_summary)
             print(f"\n{INFO_COLOR}Goodbye! 👋{RESET_COLOR}")
             break
 
