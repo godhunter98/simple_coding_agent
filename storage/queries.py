@@ -1,12 +1,22 @@
 import pathlib
 import sqlite3
 from contextlib import contextmanager
+from .db import init_db 
+
+_DB_INITIALIZED = False
 
 DB_PATH = pathlib.Path(__file__).parent/"agent_persistence.db"
 
 @contextmanager
 def get_db_cursor() -> sqlite3.Cursor:
     """Context manager for database connections. Handles commit/rollback automatically."""
+
+    global _DB_INITIALIZED
+
+    if not _DB_INITIALIZED:
+        init_db()
+        _DB_INITIALIZED = True
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
