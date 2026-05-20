@@ -13,12 +13,11 @@ class TestMain(unittest.TestCase):
         sys.modules["litellm"] = litellm_stub
         sys.modules["dotenv"] = dotenv_stub
 
-        sys.modules.pop("basic_coding_agent", None)
-        sys.modules.pop("main", None)
+        sys.modules.pop("agent.main", None)
 
-        import main
+        from agent import main
 
-        with mock.patch.object(main, "agent_loop") as mock_loop:
+        with mock.patch.object(main, "agent_loop") as mock_loop, mock.patch("sys.argv", ["main.py", "-n"]):
             main.main()
             mock_loop.assert_called_once()
 

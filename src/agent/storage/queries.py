@@ -44,7 +44,7 @@ def update_conversation_stats(conversation_id: int, total_tokens: int = 0, cost_
     """Update token count and calculate approx cost for a conversation."""
     if cost_per_token is None:
         cost_per_token = {"deepseek/deepseek-v4-flash": 0.25, "deepseek/deepseek-v4-pro": 0.70}
-
+        
     with get_db_cursor() as cursor:
         cursor.execute(
             '''
@@ -59,14 +59,14 @@ def update_conversation_stats(conversation_id: int, total_tokens: int = 0, cost_
         
         model = row["model"]
 
-        approx_cost = cost_per_token.get(model,0.0) * total_tokens
+        approx_cost_per_million_tokens = (cost_per_token.get(model, 0.0) * total_tokens) / 1_000_000
         
         cursor.execute('''
         UPDATE conversations
         SET total_tokens = ?, approx_cost = ?
         WHERE conversation_id = ?
         ''',
-        (total_tokens, approx_cost, conversation_id)
+        (total_tokens, approx_cost_per_million_tokens, conversation_id,)
         )
 
 
@@ -124,45 +124,35 @@ def get_conversation_messages(conversation_id: int):
     with get_db_cursor() as cursor:
         cursor.execute(
             '''
-            SELECT * FROM messages WHERE conversation_id = ?
+            SELECT * FROM messages WHERE conversation_id = ? ORDER BY message_id ASC
             ''',
             (conversation_id,),        
         )
         return cursor.fetchall()
 
-def get_conversation(conversation_id:int):
-    """Retrieve a single conversation to get baseline stats."""
+def get_conversation(conversation_id: int):
+    """Retrieve a single conversation by its ID to get baseline stats."""
     with get_db_cursor() as cursor:
         cursor.execute(
-        '''
-        SELECT * FROM conversations
-        WHERE conversation_id = ?
-        ''',
-        (conversation_id,),
+            "SELECT * FROM conversations WHERE conversation_id = ?",
+            (conversation_id,)
         )
         return cursor.fetchone()
-    
-def get_tool_calls_for_message(message_id:int):
+
+def get_tool_calls_for_message(message_id: int):
     """Retrieve all tool calls for a given assistant message ID."""
     with get_db_cursor() as cursor:
         cursor.execute(
-            '''
-            SELECT * FROM tool_calls
-            WHERE message_id = ?
-            ORDER BY tool_id ASC
-            ''',
-            (message_id,),
+            "SELECT * FROM tool_calls WHERE message_id = ? ORDER BY tool_id ASC",
+            (message_id,)
         )
         return cursor.fetchall()
-    
+
 def resume_conversation(conversation_id: int):
     """Re-activate an existing conversation by setting status to active and clearing ended_at."""
     with get_db_cursor() as cursor:
         cursor.execute(
-            """
-            UPDATE conversations 
-            SET status = 'active', ended_at = NULL
-            WHERE conversation_id = ?
-            """,
-            (conversation_id,),
+            "UPDATE conversations SET status = 'active', ended_at = NULL WHERE conversation_id = ?",
+            (conversation_id,)
         )
+

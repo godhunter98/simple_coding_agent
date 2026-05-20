@@ -1,3 +1,7 @@
+from rich.table import Table
+from rich.console import Console
+from agent.storage import queries
+
 # Terminal colors for output
 YOU_COLOR = "\u001b[94m"  # Blue
 ASSISTANT_COLOR = "\u001b[93m"  # Yellow
@@ -14,3 +18,42 @@ DIR_ICON = "📁"
 SUCCESS_ICON = "✅"
 ERROR_ICON = "❌"
 THINKING_ICON = "🤔"
+
+
+def display_sessions_dashboard(all_sessions: bool = False):
+    convs = queries.get_all_conversations()
+    if not convs:
+        return None
+        
+    console = Console()
+    title = "All Past Sessions" if all_sessions else "Recent Sessions"
+    table = Table(title=title, show_header=True, header_style="bold magenta")
+    table.add_column("ID", style="dim", width=6, justify="center")
+    table.add_column("Date / Time", width=20)
+    table.add_column("Model", style="blue")
+    table.add_column("Summary", style="green")
+    table.add_column("Tokens", justify="right")
+    table.add_column("Approx Cost", justify="right")
+    table.add_column("Status", justify="center")
+    
+    sessions_to_show = convs if all_sessions else convs[:5]
+    
+    for c in sessions_to_show:
+        status_style = "green" if c["status"] == "completed" else "yellow"
+        cost_display = f"${c['approx_cost']:.6f}" if c["approx_cost"] else "$0.0000"
+        summary = c["summary"] or "[No Summary Generated]"
+        started_at = c["started_at"][:19] if c["started_at"] else "N/A"
+        
+        table.add_row(
+            str(c["conversation_id"]),
+            started_at,
+            c["model"].split("/")[-1],
+            summary,
+            str(c["total_tokens"] or 0),
+            cost_display,
+            f"[{status_style}]{c['status']}[/{status_style}]"
+        )
+        
+    console.print(table)
+    return [c["conversation_id"] for c in convs]
+

@@ -75,7 +75,7 @@ def test_unsafe_bash_command_unconfirmed(mock_input):
         assert result["success"] is False
         assert result["error"] == "Cancelled by user"
 
-@patch("tools.subprocess.run")
+@patch("src.agent.tools.subprocess.run")
 @patch("builtins.input",return_value="y")
 def test_unsafe_bash_command_confirmed(mock_input,mock_subprocess):
     mock_subprocess.return_value.stdout = "Fake output"
@@ -86,7 +86,7 @@ def test_unsafe_bash_command_confirmed(mock_input,mock_subprocess):
         assert result["success"] is True
         mock_subprocess.assert_called_once()
 
-@patch("tools.subprocess.run")
+@patch("src.agent.tools.subprocess.run")
 def test_bash_command_timeout(mock_subprocess):
     # side_effect is a good way to expect dynamic behaviour when we run our bash command,
     # here we patched it to raise a subprocess.TimeoutExpired error as soon as we hit the run of our command
@@ -123,7 +123,7 @@ def test_run_existing_unsafe_bash_script_deny(mock_input):
         assert result["success"] is False
         assert ("Cancelled") in result["error"]
 
-@patch("tools.subprocess.run")
+@patch("src.agent.tools.subprocess.run")
 @patch("builtins.input",return_value="y")
 def test_run_existing_unsafe_bash_script_accept(mock_input,mock_subprocess):
     mock_subprocess.return_value.returncode = 0
