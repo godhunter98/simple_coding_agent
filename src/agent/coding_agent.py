@@ -231,7 +231,7 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
                 total_tokens = getattr(usage, "total_tokens", None)
 
                 if prompt_tokens is not None:
-                    print(f"{INFO_COLOR}  [ prompt: {prompt_tokens} tokens in context ]{RESET_COLOR}")
+                    print(f"{INFO_COLOR}  [ {prompt_tokens} toks / {DEEPSEEK_MAX_CONTEXT} ]{RESET_COLOR}")
 
                 if start_time is not None and completion_tokens and completion_tokens > 0:
                     duration = end_time - start_time
@@ -361,27 +361,57 @@ def generate_conversation_summary(conversation: List[Dict[str,Any]],model:str,ap
     '''Generate a summary from the completed conversation.'''
     print(f"\n{INFO_COLOR}Saving conversation...{RESET_COLOR}")
     
-    # We use build_messages to safely format the history
-    summary_convo = build_messages(conversation)
-    summary_convo.append({
-        "role": "user", 
-        "content": "Summarize this session in exactly 6 to 8 words. Do not use punctuation. Do not write anything else."
+    # Build a lightweight summary request — only the conversation content matters,
+    # not the original system prompt, so we replace it with a summary-specific one.
+    summary_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You generate concise session titles. "
+                "Focus on the MAIN TASK or TOPIC the user worked on. "
+                "Use 4 to 8 words. No punctuation. No quotes. No extra text.\n\n"
+                "NEVER use generic phrases like 'session ended', 'user asked', 'discussion about', or 'before discussion'. "
+                "Always describe the specific topic even if the conversation was short or casual."
+            ),
+        },
+    ]
+
+    # Include only user and assistant text content (skip tool messages to save tokens)
+    for msg in conversation:
+        if msg["role"] in ("user", "assistant") and msg.get("content"):
+            summary_messages.append({"role": msg["role"], "content": msg["content"]})
+
+    summary_messages.append({
+        "role": "user",
+        "content": (
+            "Generate a title for this session.\n\n"
+            "Good titles:\n"
+            "- Debug Flask login route 500 error\n"
+            "- Add pagination to REST API\n"
+            "- Refactor database connection pooling\n"
+            "- Casual chat about coding projects\n"
+            "- Explored project structure and dependencies\n\n"
+            "Bad titles (NEVER use these patterns):\n"
+            "- Session ended before discussion\n"
+            "- User asked about X then ended chat\n\n"
+            "Title:"
+        ),
     })
-    
+
     kwargs = {
         "model": model,
         "api_key": api_key,
-        "messages": summary_convo,
-        "max_tokens": 150, 
-        "temperature": 0.2,    
+        "messages": summary_messages,
+        "max_tokens": 30,
+        "temperature": 0.3,
         "stream": False,
-        "thinking": {"type": "disabled"} 
+        "thinking": {"type": "disabled"}
     }
 
     try:
         response = litellm.completion(**kwargs)
         content = response.choices[0].message.content
-        return content.strip() if content else "Session ended before discussion."
+        return content.strip() if content else "Untitled session"
     except Exception as e:
         print(f"Error generating summary: {e}")
         return "Summary could not be generated."
@@ -488,7 +518,12 @@ def agent_loop(model: str, api_key: str, max_iterations: int = 15, resume_id: in
         print()
 
     # Always generate summary and mark completed on exit
-    conv_summary = generate_conversation_summary(conversation, model, api_key)
+    try:
+        conv_summary = generate_conversation_summary(conversation, model, api_key)
+    except (KeyboardInterrupt, Exception) as e:
+        print(f"\n{INFO_COLOR}Summary skipped ({type(e).__name__}){RESET_COLOR}")
+        conv_summary = "Untitled session"
+    
     queries.mark_conversation_completed(conv_row_id, conv_summary)
     print(f"\n{INFO_COLOR}Goodbye! 👋{RESET_COLOR}")
 
