@@ -33,6 +33,11 @@ DEEPSEEK_MAX_CONTEXT = 1_000_000
 EXPECTED_MAX_OUTPUT  = 384_000
 SLACK                = 50_000        # one turn's growth between measure and act
 CONTEXT_LIMIT = DEEPSEEK_MAX_CONTEXT - EXPECTED_MAX_OUTPUT - SLACK
+STATE_INJECT_GROWTH = 3_000   # re-inject after this much prompt-token growth; tune later
+
+# Temp variables to test functionality
+CONTEXT_LIMIT = 6_000
+STATE_INJECT_GROWTH = 3_000
 
 # Disable pydantic warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
@@ -297,11 +302,12 @@ def run_tool_call(
         try:
             resp = tool(**tool_args)
             
-            # Track file touches for file-related tools
-            path = tool_args.get("path") or tool_args.get("file_path")
-            if path:
-                session_state.record_file(path)
-            
+            if tool_name in {"read_file","edit_file"}:
+                # Track file touches for file-related tools
+                path = tool_args.get("path") or tool_args.get("filename")
+                if path:
+                    session_state.record_file(path)
+                
             # tool args and tool resp are dicts, but sqlite needs a string, we dump them!
             queries.add_tool_call(db_msg_id,tool_name,json.dumps(tool_args),json.dumps(resp))
             resp_str = truncate_tool_output(json.dumps(resp),tool_name)
@@ -453,6 +459,7 @@ def agent_loop(model: str, api_key: str, max_iterations: int = 15, resume_id: in
         session_state = Session_state()
 
     show_ttft = True
+    last_inject_tokens = 0
 
     try:
         while True:
@@ -502,8 +509,13 @@ def agent_loop(model: str, api_key: str, max_iterations: int = 15, resume_id: in
                         
                         if not assistant_message.tool_calls:
                             break
+                        
+                        if prompt_tokens is not None and prompt_tokens - last_inject_tokens >= STATE_INJECT_GROWTH:
+                            conversation.append({"role":"user","content":session_state.render()})
+                            last_inject_tokens = prompt_tokens
+
                         if prompt_tokens is not None and prompt_tokens > CONTEXT_LIMIT:
-                            mask_old_observations(conversation, keep_last_n=10)
+                            mask_old_observations(conversation, keep_last_n=1)
 
                         spinner.start()
                         continue                                     
