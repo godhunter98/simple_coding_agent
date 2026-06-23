@@ -8,10 +8,11 @@ A lightweight CLI coding assistant powered by LLMs via [litellm](https://github.
 ## Features
 
 - 5 tools: read, list, edit files · run bash commands · run bash scripts
-- Provider-agnostic — works with OpenAI, Anthropic, Gemini, DeepSeek, local models
+- Built on LiteLLM, with DeepSeek-oriented tool schema support and optional local API base URL
 - Safety checks on shell commands with warn + confirm prompt
 - Animated terminal UI — block-letter banner, braille spinner
-- Bunch of tests to test functionality
+- Conversation persistence with session listing and resume support
+- Pytest coverage for tools, CLI routing, and resume reconstruction
 
 ## Installation
 
@@ -38,34 +39,66 @@ Any model supported by litellm works.
 ## Usage
 
 ```bash
-uv run python main.py
+uv run agent
 # or
-python main.py
+agent
+# or, from the source tree
+uv run python -m agent.main
 ```
 
-Type `exit`, `quit`, or press `Ctrl+C` to quit.
+Useful options:
+
+```bash
+agent -n          # start a new session
+agent -l          # list past sessions
+agent -r 3        # resume conversation ID 3
+```
+
+Inside a session, type `exit`, `quit`, or press `Ctrl+C` to quit.
 
 ## Project structure
 
 ```
 simple-coding-agent/
-├── main.py           # entrypoint
-├── coding_agent.py   # agent loop + LLM calls
-├── tools.py          # tool definitions + safety checks
-├── prompts.py        # system prompt
-├── animation.py      # banner + spinner
-├── ui.py             # colors + icons
-└── pyproject.toml
+├── src/
+│   └── agent/
+│       ├── main.py              # CLI entrypoint and session selection
+│       ├── coding_agent.py      # agent loop, LLM calls, tool execution
+│       ├── tools.py             # tool implementations and schemas
+│       ├── context_manager.py   # context truncation and session state
+│       ├── prompts.py           # system prompt
+│       ├── animation.py         # banner and spinner
+│       ├── ui.py                # colors, icons, session dashboard
+│       └── storage/
+│           ├── db.py            # SQLite schema setup
+│           └── queries.py       # persistence helpers
+├── tests/                       # pytest suite
+├── pyproject.toml
+└── uv.lock
 ```
 
 ## Adding new tools
 
-1. Add a function in `tools.py`
-2. Add its schema to `TOOLS`
-3. Register it in `tool_registry` in `coding_agent.py`
+1. Add a typed function in `src/agent/tools.py`.
+2. Decorate it with `@register_tool`.
+3. Give it a clear docstring. The decorator uses the function name, type hints, and docstring to build the tool schema.
+4. Add or update tests in `tests/`.
+
+## Testing
+
+```bash
+uv run pytest
+```
+
+If you already have the local virtual environment set up:
+
+```bash
+.venv/bin/python -m pytest -q
+```
 
 ## Troubleshooting
 
 - Missing env vars → set `MODEL` and `API_KEY` in `.env`
 - LLM call fails → check API key, model name, and network
 - File errors → verify path and permissions
+- `python main.py` fails → use `agent` or `python -m agent.main`; the entrypoint lives under `src/agent/`

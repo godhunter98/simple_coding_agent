@@ -515,7 +515,7 @@ def agent_loop(model: str, api_key: str, max_iterations: int = 15, resume_id: in
         session_state = Session_state()
 
     show_ttft = True
-    last_inject_tokens = 0
+    last_state_refresh_tokens = 0
 
     try:
         while True:
@@ -564,13 +564,15 @@ def agent_loop(model: str, api_key: str, max_iterations: int = 15, resume_id: in
                         handle_assistant_message(assistant_message, conversation, conv_row_id, session_state)
                         
                         if not assistant_message.tool_calls:
+                            if prompt_tokens is not None and prompt_tokens - last_state_refresh_tokens >= STATE_INJECT_GROWTH:
+                                refresh_session_state(conversation,model,api_key,session_state)
+                                conversation.append({
+                                    "role": "system",
+                                    "content": f"Internal session state summary:\n{session_state.render()}",
+                                })
+                                last_state_refresh_tokens = prompt_tokens
                             break
                         
-                        if prompt_tokens is not None and prompt_tokens - last_inject_tokens >= STATE_INJECT_GROWTH:
-                            refresh_session_state(conversation,model,api_key,session_state)
-                            conversation.append({"role":"user","content":session_state.render()})
-                            last_inject_tokens = prompt_tokens
-
                         if prompt_tokens is not None and prompt_tokens > CONTEXT_LIMIT:
                             mask_old_observations(conversation, keep_last_n=1)
 
