@@ -195,7 +195,7 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
             "temperature": 0.1,
             "tools": get_tool_schema(model),
             "stream":True,
-            "thinking": {"type": "disabled"}
+            "extra_body":{"thinking": {"type": "disabled"}}
         }
 
         # Allow overriding the LLM base URL without changing call sites.
@@ -244,7 +244,7 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
                     tps = completion_tokens / duration
                     if show_ttft:
                         print(f"{INFO_COLOR}  [ {ttft:.1f}s - 1st token ]{RESET_COLOR}")
-                    if kwargs.get("thinking") == {"type": "disabled"}:
+                    if kwargs.get("extra_body", {}).get("thinking") == {"type": "disabled"}:
                         print(f"{INFO_COLOR}  [ {tps:.1f} toks/s | {completion_tokens} tokens in {duration:.2f}s | Thinking_Mode 🧠: ❌ ]{RESET_COLOR}\n")
                     else:
                         print(f"{INFO_COLOR}  [ {tps:.1f} toks/s | {completion_tokens} tokens in {duration:.2f}s | Thinking_Mode 🧠 : ✅ ]{RESET_COLOR}\n")
@@ -419,13 +419,19 @@ def generate_conversation_summary(conversation: List[Dict[str,Any]],model:str,ap
         "max_tokens": 30,
         "temperature": 0.3,
         "stream": False,
-        "thinking": {"type": "disabled"}
+        "extra_body":{"thinking": {"type": "disabled"}}
     }
 
+    if llm_config.get("api_base"):
+        kwargs["api_base"] = llm_config["api_base"]
+
     try:
-        response = litellm.completion(**kwargs)
-        content = response.choices[0].message.content
-        return content.strip() if content else "Untitled session"
+        for attempt in range(2):
+            response = litellm.completion(**kwargs)
+            content = response.choices[0].message.content
+            if content and content.strip():
+                return content.strip()
+        return "Untitled session"
     except Exception as e:
         print(f"Error generating summary: {e}")
         return "Summary could not be generated."
@@ -460,7 +466,7 @@ def refresh_session_state(conversation:List[Dict],model:str,api_key:str,session_
         "temperature": 0.2,
         "stream": False,
         "response_format":{"type": "json_object"} ,
-        "thinking": {"type": "disabled"}
+        "extra_body":{"thinking": {"type": "disabled"}}
     }
 
     
