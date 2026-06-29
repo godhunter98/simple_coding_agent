@@ -218,6 +218,10 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
 
                 print(f"{ASSISTANT_COLOR}Assistant:{RESET_COLOR}")
                 accumulated_text = ""
+
+                last_render_time = 0
+                RENDER_INTERVAL = 1 / 15  # match your refresh rate
+
                 with Live("", refresh_per_second=15, vertical_overflow="visible") as live:
                     for chunk in response:
                         if start_time is None:
@@ -226,8 +230,14 @@ def llm_completions(conversation: List[Dict[str, str]], model: str, api_key: str
                         delta = chunk.choices[0].delta
                         if delta.content:
                             accumulated_text += delta.content
-                            live.update(Markdown(accumulated_text))
+
+                            # increase efficiency by building only relevant chunks
+                            now = time.monotonic()
+                            if now-last_render_time >= RENDER_INTERVAL:
+                                live.update(Markdown(accumulated_text))
+                                last_render_time = now 
                         chunks.append(chunk)
+                    live.update(Markdown(accumulated_text))
 
                 end_time = time.perf_counter()
 

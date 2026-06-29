@@ -23,4 +23,5 @@ where = ["src"]
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "scalene>=2.3.0",
 ]

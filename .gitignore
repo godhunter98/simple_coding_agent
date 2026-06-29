@@ -34,3 +34,6 @@ ralph*
 *.sqlite3
 schema.md
 .idea/
+
+# Profiler output
+profiles/
